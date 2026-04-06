@@ -696,7 +696,7 @@ export function createOpenClawReadTool(
         maxBytes: resolveAdaptiveReadMaxBytes(options),
       });
       // Use the original user input path from params, not the resolved absolute path
-      let filePath = typeof (params as any)?.path === "string" ? String((params as any).path) : (typeof record?.path === "string" ? String(record.path) : "<unknown>");
+      let filePath = typeof (params)?.path === "string" ? String((params).path) : (typeof record?.path === "string" ? String(record.path) : "<unknown>");
       // Strip workspace prefix if present - ONLY in dev build
       if (filePath.includes('workspace')) {
         const workspaceIndex = filePath.indexOf('workspace/');

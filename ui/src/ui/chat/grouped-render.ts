@@ -54,7 +54,7 @@ function extractImages(message: unknown): ImageBlock[] {
       } else if (b.type === "image_url") {
         const imageUrl = b.image_url as Record<string, unknown> | undefined;
         if (typeof imageUrl?.url === "string") {
-          const urlPath = imageUrl.url as string;
+          const urlPath = imageUrl.url;
           const filename = urlPath.split('/').pop() || 'image';
           images.push({ url: imageUrl.url, filename, httpUrl: imageUrl.url });
         }
