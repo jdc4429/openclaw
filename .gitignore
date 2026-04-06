@@ -141,3 +141,12 @@ changelog/fragments/
 
 # Local scratch workspace
 .tmp/
+run
+restart
+build
+update
+check
+stop
+start
+clean
+install
