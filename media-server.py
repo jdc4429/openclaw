@@ -1,3 +1,7 @@
+# Recommended to run in your OpenClaw's workspace - Modify path if not workspace
+# This is needed if you want to stream local content to your webchat session
+# Images are sent via Data base64 embeding. All other media is streamed.
+#
 #!/usr/bin/env python3
 """
 Simple Media Server for WebChat
