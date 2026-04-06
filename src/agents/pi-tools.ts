@@ -9,6 +9,7 @@ import { isSubagentSessionKey } from "../routing/session-key.js";
 import { resolveGatewayMessageChannel } from "../utils/message-channel.js";
 import { resolveAgentConfig } from "./agent-scope.js";
 import { createApplyPatchTool } from "./apply-patch.js";
+import { downloadVideoTool } from "./tools/download-video.js";
 import {
   createExecTool,
   createProcessTool,
@@ -571,6 +572,7 @@ export function createOpenClawCodingTools(options?: {
       onYield: options?.onYield,
       allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
     }),
+    downloadVideoTool as AnyAgentTool,
   ];
   const toolsForMemoryFlush =
     isMemoryFlushRun && memoryFlushWritePath

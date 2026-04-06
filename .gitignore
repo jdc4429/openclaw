@@ -150,3 +150,12 @@ stop
 start
 clean
 install
+openclaw.json
+\agents/
+canvas/
+devices/
+identity/
+logs/
+tasks/
+telegram/
+update-check.json

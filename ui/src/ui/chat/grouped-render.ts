@@ -21,7 +21,11 @@ import { extractToolCards, renderToolCardSidebar } from "./tool-cards.ts";
 type ImageBlock = {
   url: string;
   alt?: string;
+  filename?: string;
+  httpUrl?: string;
 };
+
+type MediaType = "image" | "audio" | "video" | null;
 
 function extractImages(message: unknown): ImageBlock[] {
   const m = message as Record<string, unknown>;
@@ -36,28 +40,130 @@ function extractImages(message: unknown): ImageBlock[] {
       const b = block as Record<string, unknown>;
 
       if (b.type === "image") {
-        // Handle source object format (from sendChatMessage)
         const source = b.source as Record<string, unknown> | undefined;
+        const filename = typeof b.url === "string" ? b.url.split('/').pop() || 'image' : 'image';
+        const httpUrl = typeof b.url === "string" ? b.url : undefined;
         if (source?.type === "base64" && typeof source.data === "string") {
           const data = source.data;
           const mediaType = (source.media_type as string) || "image/png";
-          // If data is already a data URL, use it directly
           const url = data.startsWith("data:") ? data : `data:${mediaType};base64,${data}`;
-          images.push({ url });
+          images.push({ url, filename, httpUrl });
         } else if (typeof b.url === "string") {
-          images.push({ url: b.url });
+          images.push({ url: b.url, filename, httpUrl: b.url });
         }
       } else if (b.type === "image_url") {
-        // OpenAI format
         const imageUrl = b.image_url as Record<string, unknown> | undefined;
         if (typeof imageUrl?.url === "string") {
-          images.push({ url: imageUrl.url });
+          const urlPath = imageUrl.url as string;
+          const filename = urlPath.split('/').pop() || 'image';
+          images.push({ url: imageUrl.url, filename, httpUrl: imageUrl.url });
         }
       }
     }
   }
 
   return images;
+}
+
+type AudioBlock = {
+  type: "audio";
+  data: string;
+  mimeType: string;
+  filename?: string;
+};
+
+type VideoBlock = {
+  type: "video";
+  data: string;
+  mimeType: string;
+  filename?: string;
+};
+
+function extractAudioVideoBlocks(message: unknown): { audio: AudioBlock[]; video: VideoBlock[] } {
+  const m = message as Record<string, unknown>;
+  const content = m.content;
+  const audio: AudioBlock[] = [];
+  const video: VideoBlock[] = [];
+
+  if (!Array.isArray(content)) {
+    return { audio, video };
+  }
+
+  for (let i = 0; i < content.length; i++) {
+    const block = content[i];
+    if (typeof block !== "object" || block === null) {
+      continue;
+    }
+    const b = block as Record<string, unknown>;
+
+    if (b.type === "audio") {
+      if (typeof b.url === "string") {
+        audio.push({
+          type: "audio",
+          data: b.url,
+          mimeType: b.mimeType as string || "audio/ogg",
+          filename: b.filename as string || undefined
+        });
+      } else if (typeof b.data === "string") {
+        const dataUrl = b.data.startsWith("data:") ? b.data : `data:${b.mimeType || "audio/ogg"};base64,${b.data}`;
+        audio.push({
+          type: "audio",
+          data: dataUrl,
+          mimeType: b.mimeType as string || "audio/ogg",
+          filename: b.filename as string || undefined
+        });
+      }
+    }
+
+    if (b.type === "video") {
+      if (typeof b.url === "string") {
+        video.push({
+          type: "video",
+          data: b.url,
+          mimeType: b.mimeType as string || "video/mp4",
+          filename: b.filename as string || undefined
+        });
+      } else if (typeof b.data === "string") {
+        const dataUrl = b.data.startsWith("data:") ? b.data : `data:${b.mimeType || "video/mp4"};base64,${b.data}`;
+        video.push({
+          type: "video",
+          data: dataUrl,
+          mimeType: b.mimeType as string || "video/mp4",
+          filename: b.filename as string || undefined
+        });
+      }
+    }
+  }
+  return { audio, video };
+}
+
+function detectMediaInMessage(message: unknown): MediaType {
+  const m = message as Record<string, unknown>;
+  const content = m.content;
+
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (typeof block !== "object" || block === null) {
+        continue;
+      }
+      const b = block as Record<string, unknown>;
+
+      if (b.type === "image" || b.type === "image_url") {
+        return "image";
+      }
+      if (b.type === "audio" || b.type === "input_audio") {
+        return "audio";
+      }
+      if (b.type === "video" || b.type === "video_url") {
+        return "video";
+      }
+    }
+  }
+  return null;
+}
+
+function hasMediaContent(message: unknown): boolean {
+  return detectMediaInMessage(message) !== null;
 }
 
 export function renderReadingIndicatorGroup(assistant?: AssistantIdentity, basePath?: string) {
@@ -147,7 +253,6 @@ export function renderMessageGroup(
     minute: "2-digit",
   });
 
-  // Aggregate usage/cost/model across all messages in the group
   const meta = extractGroupMeta(group, opts.contextWindow ?? null);
 
   return html`
@@ -185,8 +290,6 @@ export function renderMessageGroup(
     </div>
   `;
 }
-
-// ── Per-message metadata (tokens, cost, model, context %) ──
 
 type GroupMeta = {
   input: number;
@@ -239,7 +342,6 @@ function extractGroupMeta(group: MessageGroup, contextWindow: number | null): Gr
   return { input, output, cacheRead, cacheWrite, cost, model, contextPercent };
 }
 
-/** Compact token count formatter (e.g. 128000 → "128k"). */
 function fmtTokens(n: number): string {
   if (n >= 1_000_000) {
     return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
@@ -257,7 +359,6 @@ function renderMessageMeta(meta: GroupMeta | null) {
 
   const parts: Array<ReturnType<typeof html>> = [];
 
-  // Token counts: ↑input ↓output
   if (meta.input) {
     parts.push(html`<span class="msg-meta__tokens">↑${fmtTokens(meta.input)}</span>`);
   }
@@ -265,7 +366,6 @@ function renderMessageMeta(meta: GroupMeta | null) {
     parts.push(html`<span class="msg-meta__tokens">↓${fmtTokens(meta.output)}</span>`);
   }
 
-  // Cache: R/W
   if (meta.cacheRead) {
     parts.push(html`<span class="msg-meta__cache">R${fmtTokens(meta.cacheRead)}</span>`);
   }
@@ -273,12 +373,10 @@ function renderMessageMeta(meta: GroupMeta | null) {
     parts.push(html`<span class="msg-meta__cache">W${fmtTokens(meta.cacheWrite)}</span>`);
   }
 
-  // Cost
   if (meta.cost > 0) {
     parts.push(html`<span class="msg-meta__cost">$${meta.cost.toFixed(4)}</span>`);
   }
 
-  // Context %
   if (meta.contextPercent !== null) {
     const pct = meta.contextPercent;
     const cls =
@@ -290,9 +388,7 @@ function renderMessageMeta(meta: GroupMeta | null) {
     parts.push(html`<span class="${cls}">${pct}% ctx</span>`);
   }
 
-  // Model
   if (meta.model) {
-    // Shorten model name: strip provider prefix if present (e.g. "anthropic/claude-3.5-sonnet" → "claude-3.5-sonnet")
     const shortModel = meta.model.includes("/") ? meta.model.split("/").pop()! : meta.model;
     parts.push(html`<span class="msg-meta__model">${shortModel}</span>`);
   }
@@ -399,7 +495,6 @@ function renderDeleteButton(onDelete: () => void, side: DeleteConfirmSide) {
             document.removeEventListener("click", closeOnOutside, true);
           };
 
-          // Close on click outside.
           const closeOnOutside = (evt: MouseEvent) => {
             if (!popover.contains(evt.target as Node) && evt.target !== btn) {
               removePopover();
@@ -536,7 +631,6 @@ function renderAvatar(
     />`;
   }
 
-  /* Assistant with no custom avatar: use logo when basePath available */
   if (normalized === "assistant" && basePath) {
     const logoUrl = agentLogoUrl(basePath);
     return html`<img
@@ -551,7 +645,7 @@ function renderAvatar(
 
 function isAvatarUrl(value: string): boolean {
   return (
-    /^https?:\/\//i.test(value) || /^data:image\//i.test(value) || value.startsWith("/") // Relative paths from avatar endpoint
+    /^https?:\/\//i.test(value) || /^data:image\//i.test(value) || value.startsWith("/")
   );
 }
 
@@ -560,27 +654,128 @@ function renderMessageImages(images: ImageBlock[]) {
     return nothing;
   }
 
-  const openImage = (url: string) => {
-    openExternalUrlSafe(url, { allowDataImage: true });
-  };
-
   return html`
     <div class="chat-message-images">
       ${images.map(
         (img) => html`
-          <img
-            src=${img.url}
-            alt=${img.alt ?? "Attached image"}
-            class="chat-message-image"
-            @click=${() => openImage(img.url)}
-          />
+          <div class="chat-image-wrapper">
+            <img
+              src=${img.url}
+              alt=${img.alt ?? "Attached image"}
+              class="chat-message-image"
+              onload="(e) => { const img = e.target; img.dataset.orientation = img.naturalWidth > img.naturalHeight ? 'landscape' : 'portrait'; }"
+            />
+            ${img.filename
+              ? html`<a
+                  href=${img.httpUrl || img.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="chat-image-filename"
+                  title="Open full-size image"
+                >
+                  ${img.filename}
+                </a>`
+              : nothing}
+          </div>
         `,
       )}
     </div>
   `;
 }
 
-/** Render tool cards inside a collapsed `<details>` element. */
+function renderMessageMedia(audioBlocks: AudioBlock[], videoBlocks: VideoBlock[]) {
+  const elements = [];
+
+  for (let i = 0; i < audioBlocks.length; i++) {
+    const audio = audioBlocks[i];
+    elements.push(html`
+      <div class="chat-media-wrapper">
+        <audio controls class="chat-message-audio">
+          <source src=${audio.data} type=${audio.mimeType} />
+          Your browser does not support the audio element.
+        </audio>
+        <div class="chat-media-filename">${audio.filename || audio.mimeType}</div>
+      </div>
+    `);
+  }
+
+  for (let i = 0; i < videoBlocks.length; i++) {
+    const video = videoBlocks[i];
+    elements.push(html`
+      <div class="chat-media-wrapper">
+        <video controls class="chat-message-video" style="max-width: 100%; max-height: 480px;">
+          <source src=${video.data} type=${video.mimeType} />
+          Your browser does not support the video element.
+        </video>
+        <div class="chat-media-filename">${video.filename || video.mimeType}</div>
+      </div>
+    `);
+  }
+
+  if (elements.length === 0) {
+    return nothing;
+  }
+
+  return html`<div class="chat-message-media">${elements}</div>`;
+}
+
+function renderVideoEmbed(markdown: string) {
+  // Convert YouTube watch URL to embed URL
+  const watchMatch = markdown.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/);
+  if (watchMatch) {
+    const embedUrl = `https://www.youtube.com/embed/${watchMatch[1]}`;
+    return html`
+      <div class="video-embed-container">
+        <iframe 
+          src=${embedUrl}
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="no-referrer-when-downgrade"
+          allowfullscreen
+          class="video-embed-frame"
+        ></iframe>
+      </div>
+    `;
+  }
+  
+  // Look for YouTube embed URLs
+  const youtubeMatch = markdown.match(/https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+  if (youtubeMatch) {
+    const embedUrl = `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+    return html`
+      <div class="video-embed-container">
+        <iframe 
+          src=${embedUrl}
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="no-referrer-when-downgrade"
+          allowfullscreen
+          class="video-embed-frame"
+        ></iframe>
+      </div>
+    `;
+  }
+  
+  // Look for Vimeo embed URLs
+  const vimeoMatch = markdown.match(/https?:\/\/(?:www\.)?player\.vimeo\.com\/video\/(\d+)/);
+  if (vimeoMatch) {
+    const embedUrl = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    return html`
+      <div class="video-embed-container">
+        <iframe 
+          src=${embedUrl}
+          frameborder="0"
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowfullscreen
+          class="video-embed-frame"
+        ></iframe>
+      </div>
+    `;
+  }
+  
+  return nothing;
+}
+
 function renderCollapsedToolCards(
   toolCards: ToolCard[],
   onOpenSidebar?: (content: string) => void,
@@ -610,21 +805,11 @@ function renderCollapsedToolCards(
   `;
 }
 
-/**
- * Max characters for auto-detecting and pretty-printing JSON.
- * Prevents DoS from large JSON payloads in assistant/tool messages.
- */
 const MAX_JSON_AUTOPARSE_CHARS = 20_000;
 
-/**
- * Detect whether a trimmed string is a JSON object or array.
- * Must start with `{`/`[` and end with `}`/`]` and parse successfully.
- * Size-capped to prevent render-loop DoS from large JSON messages.
- */
 function detectJson(text: string): { parsed: unknown; pretty: string } | null {
   const t = text.trim();
 
-  // Enforce size cap to prevent UI freeze from multi-MB JSON payloads
   if (t.length > MAX_JSON_AUTOPARSE_CHARS) {
     return null;
   }
@@ -640,7 +825,6 @@ function detectJson(text: string): { parsed: unknown; pretty: string } | null {
   return null;
 }
 
-/** Build a short summary label for collapsed JSON (type + key count or array length). */
 function jsonSummaryLabel(parsed: unknown): string {
   if (Array.isArray(parsed)) {
     return `Array (${parsed.length} item${parsed.length === 1 ? "" : "s"})`;
@@ -687,8 +871,9 @@ function renderGroupedMessage(
   const toolCards = (opts.showToolCalls ?? true) ? extractToolCards(message) : [];
   const hasToolCards = toolCards.length > 0;
   const images = extractImages(message);
+  const { audio: audioBlocks, video: videoBlocks } = extractAudioVideoBlocks(message);
   const hasImages = images.length > 0;
-
+  const hasMedia = audioBlocks.length > 0 || videoBlocks.length > 0;
   const extractedText = extractTextCached(message);
   const extractedThinking =
     opts.showReasoning && role === "assistant" ? extractThinkingCached(message) : null;
@@ -698,20 +883,18 @@ function renderGroupedMessage(
   const canCopyMarkdown = role === "assistant" && Boolean(markdown?.trim());
   const canExpand = role === "assistant" && Boolean(onOpenSidebar && markdown?.trim());
 
-  // Detect pure-JSON messages and render as collapsible block
   const jsonResult = markdown && !opts.isStreaming ? detectJson(markdown) : null;
 
   const bubbleClasses = ["chat-bubble", opts.isStreaming ? "streaming" : "", "fade-in"]
     .filter(Boolean)
     .join(" ");
 
-  if (!markdown && hasToolCards && isToolResult) {
+  if (!markdown && hasToolCards && isToolResult && !hasMedia) {
     return renderCollapsedToolCards(toolCards, onOpenSidebar);
   }
 
-  // Suppress empty bubbles when tool cards are the only content and toggle is off
   const visibleToolCards = hasToolCards && (opts.showToolCalls ?? true);
-  if (!markdown && !visibleToolCards && !hasImages) {
+  if (!markdown && !visibleToolCards && !hasImages && !hasMedia) {
     return nothing;
   }
 
@@ -725,6 +908,7 @@ function renderGroupedMessage(
     markdown && !toolSummaryLabel ? markdown.trim().replace(/\s+/g, " ").slice(0, 120) : "";
 
   const hasActions = canCopyMarkdown || canExpand;
+  const messageHasMedia = hasMediaContent(message) || audioBlocks.length > 0 || videoBlocks.length > 0;
 
   return html`
     <div class="${bubbleClasses}">
@@ -736,7 +920,7 @@ function renderGroupedMessage(
         : nothing}
       ${isToolMessage
         ? html`
-            <details class="chat-tool-msg-collapse">
+            <details class="chat-tool-msg-collapse" ?open=${messageHasMedia}>
               <summary class="chat-tool-msg-summary">
                 <span class="chat-tool-msg-summary__icon">${icons.zap}</span>
                 <span class="chat-tool-msg-summary__label">Tool output</span>
@@ -748,6 +932,7 @@ function renderGroupedMessage(
               </summary>
               <div class="chat-tool-msg-body">
                 ${renderMessageImages(images)}
+                ${renderMessageMedia(audioBlocks, videoBlocks)}
                 ${reasoningMarkdown
                   ? html`<div class="chat-thinking">
                       ${unsafeHTML(toSanitizedMarkdownHtml(reasoningMarkdown))}
@@ -763,7 +948,12 @@ function renderGroupedMessage(
                     </details>`
                   : markdown
                     ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">
-                        ${unsafeHTML(toSanitizedMarkdownHtml(markdown))}
+                        ${markdown.trim().startsWith('<audio') 
+                          ? unsafeHTML(markdown)
+                          : (markdown.includes('youtube.com/watch') || markdown.includes('youtube.com/embed') || markdown.includes('player.vimeo.com'))
+                            ? renderVideoEmbed(markdown)
+                            : unsafeHTML(toSanitizedMarkdownHtml(markdown))
+                        }
                       </div>`
                     : nothing}
                 ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}
@@ -772,6 +962,7 @@ function renderGroupedMessage(
           `
         : html`
             ${renderMessageImages(images)}
+            ${renderMessageMedia(audioBlocks, videoBlocks)}
             ${reasoningMarkdown
               ? html`<div class="chat-thinking">
                   ${unsafeHTML(toSanitizedMarkdownHtml(reasoningMarkdown))}
@@ -787,7 +978,12 @@ function renderGroupedMessage(
                 </details>`
               : markdown
                 ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">
-                    ${unsafeHTML(toSanitizedMarkdownHtml(markdown))}
+                    ${markdown.trim().startsWith('<audio') 
+                      ? unsafeHTML(markdown)
+                      : (markdown.includes('youtube.com/watch') || markdown.includes('youtube.com/embed') || markdown.includes('player.vimeo.com'))
+                        ? renderVideoEmbed(markdown)
+                        : unsafeHTML(toSanitizedMarkdownHtml(markdown))
+                    }
                   </div>`
                 : nothing}
             ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}

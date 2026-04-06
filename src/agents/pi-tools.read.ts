@@ -26,6 +26,8 @@ import type { AnyAgentTool } from "./pi-tools.types.js";
 import { assertSandboxPath } from "./sandbox-paths.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
 import { sanitizeToolResultImages } from "./tool-images.js";
+import { sanitizeToolResultMedia } from "./tool-media.js";
+import type { AudioContent, VideoContent } from "./command/types.js";
 
 export {
   CLAUDE_PARAM_GROUPS,
@@ -40,8 +42,10 @@ export {
 type ToolContentBlock = AgentToolResult<unknown>["content"][number];
 type ImageContentBlock = Extract<ToolContentBlock, { type: "image" }>;
 type TextContentBlock = Extract<ToolContentBlock, { type: "text" }>;
+// Extended content types that include audio/video support
+type ExtendedContentBlock = ToolContentBlock | AudioContent | VideoContent;
 
-const DEFAULT_READ_PAGE_MAX_BYTES = 50 * 1024;
+const DEFAULT_READ_PAGE_MAX_BYTES = 512 * 1024;
 const MAX_ADAPTIVE_READ_MAX_BYTES = 512 * 1024;
 const ADAPTIVE_READ_CONTEXT_SHARE = 0.2;
 const CHARS_PER_TOKEN_ESTIMATE = 4;
@@ -235,6 +239,21 @@ async function executeReadWithAdaptivePaging(params: {
     const pageResult = await params.base.execute(params.toolCallId, pageArgs, params.signal);
     firstResult ??= pageResult;
 
+    // Check if result contains a media block (image/audio/video)
+    const content = Array.isArray(pageResult.content) ? pageResult.content : [];
+    const hasMediaBlock = content.some(
+      (block) =>
+        block &&
+        typeof block === "object" &&
+        typeof (block as { type?: unknown }).type === "string" &&
+        ["image", "audio", "video"].includes((block as { type: string }).type),
+    );
+
+    // If result contains media, return it immediately without truncation
+    if (hasMediaBlock) {
+      return pageResult;
+    }
+
     const rawText = getToolResultText(pageResult);
     if (typeof rawText !== "string") {
       return pageResult;
@@ -283,11 +302,13 @@ async function executeReadWithAdaptivePaging(params: {
   return withToolResultText(firstResult, finalText);
 }
 
-function rewriteReadImageHeader(text: string, mimeType: string): string {
-  // pi-coding-agent uses: "Read image file [image/png]"
-  if (text.startsWith("Read image file [") && text.endsWith("]")) {
-    return `Read image file [${mimeType}]`;
+function rewriteReadImageHeader(text: string, mimeType: string, filePath?: string): string {
+  const trimmedText = text.trim();
+  if (trimmedText.startsWith("Read image file")) {
+    console.log("DEBUG rewriteReadImageHeader: Suppressing text:", JSON.stringify(text));
+    return "";
   }
+  console.log("DEBUG rewriteReadImageHeader: Not suppressing text:", JSON.stringify(text), "trimmedText:", JSON.stringify(trimmedText), "startsWith?", trimmedText.startsWith("Read image file"));
   return text;
 }
 
@@ -295,60 +316,81 @@ async function normalizeReadImageResult(
   result: AgentToolResult<unknown>,
   filePath: string,
 ): Promise<AgentToolResult<unknown>> {
-  const content = Array.isArray(result.content) ? result.content : [];
-
-  const image = content.find(
-    (b): b is ImageContentBlock =>
-      !!b &&
-      typeof b === "object" &&
-      (b as { type?: unknown }).type === "image" &&
-      typeof (b as { data?: unknown }).data === "string" &&
-      typeof (b as { mimeType?: unknown }).mimeType === "string",
-  );
-  if (!image) {
-    return result;
+  console.log(`normalizeReadImageResult: filePath=${filePath}`);
+  
+  // Get absolute path
+  const workspaceRoot = '/home/jeffc/.openclaw/workspace';
+  let absoluteFilePath = filePath;
+  if (!path.isAbsolute(filePath) && !filePath.startsWith('/')) {
+    absoluteFilePath = path.resolve(workspaceRoot, filePath);
   }
-
-  if (!image.data.trim()) {
-    throw new Error(`read: image payload is empty (${filePath})`);
-  }
-
-  const sniffed = await sniffMimeFromBase64(image.data);
-  if (!sniffed) {
-    return result;
-  }
-
-  if (!sniffed.startsWith("image/")) {
-    throw new Error(
-      `read: file looks like ${sniffed} but was treated as ${image.mimeType} (${filePath})`,
-    );
-  }
-
-  if (sniffed === image.mimeType) {
-    return result;
-  }
-
-  const nextContent = content.map((block) => {
-    if (block && typeof block === "object" && (block as { type?: unknown }).type === "image") {
-      const b = block as ImageContentBlock & { mimeType: string };
-      return { ...b, mimeType: sniffed } satisfies ImageContentBlock;
-    }
-    if (
-      block &&
-      typeof block === "object" &&
-      (block as { type?: unknown }).type === "text" &&
-      typeof (block as { text?: unknown }).text === "string"
-    ) {
-      const b = block as TextContentBlock & { text: string };
+  console.log(`Absolute path: ${absoluteFilePath}`);
+  
+  // Get file extension
+  const ext = absoluteFilePath.toLowerCase().split('.').pop() || '';
+  
+  // Define supported audio and video extensions
+  const audioExtensions = ['ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus', 'webm', 'wma'];
+  const videoExtensions = ['mp4', 'webm', 'avi', 'mov', 'mkv', 'm4v', 'mpg', 'mpeg'];
+  
+  const isAudio = audioExtensions.includes(ext);
+  const isVideo = videoExtensions.includes(ext);
+  
+  // MIME type mapping
+  const mimeTypes: Record<string, string> = {
+    'ogg': 'audio/ogg',
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'flac': 'audio/flac',
+    'm4a': 'audio/mp4',
+    'aac': 'audio/aac',
+    'opus': 'audio/opus',
+    'webm': 'video/webm',
+    'mp4': 'video/mp4',
+    'avi': 'video/x-msvideo',
+    'mov': 'video/quicktime',
+    'mkv': 'video/x-matroska',
+    'm4v': 'video/x-m4v',
+    'mpg': 'video/mpeg',
+    'mpeg': 'video/mpeg',
+    'wma': 'audio/x-ms-wma',
+  };
+  
+  const mimeType = mimeTypes[ext] || (isAudio ? 'audio/ogg' : isVideo ? 'video/mp4' : '');
+  
+  if (isAudio || isVideo) {
+    console.log(`DETECTED MEDIA FILE: ${absoluteFilePath} (${ext}) -> ${mimeType}`);
+    
+    const fileName = path.basename(absoluteFilePath);
+    const fileUrl = `http://localhost:18791/${filePath}`;
+    
+    console.log(`Returning ${isAudio ? 'audio' : 'video'} block (streaming via URL)`);
+    
+    if (isAudio) {
       return {
-        ...b,
-        text: rewriteReadImageHeader(b.text, sniffed),
-      } satisfies TextContentBlock;
+        ...result,
+        content: [{
+          type: "audio",
+          url: fileUrl,
+          mimeType: mimeType,
+          filename: fileName
+        }] as unknown as AgentToolResult<unknown>["content"]
+      };
+    } else {
+      return {
+        ...result,
+        content: [{
+          type: "video",
+          url: fileUrl,
+          mimeType: mimeType,
+          filename: fileName
+        }] as unknown as AgentToolResult<unknown>["content"]
+      };
     }
-    return block;
-  });
-
-  return { ...result, content: nextContent };
+  }
+  
+  // If we get here, return original result
+  return result;
 }
 
 export function wrapToolWorkspaceRootGuard(tool: AnyAgentTool, root: string): AnyAgentTool {
@@ -653,13 +695,38 @@ export function createOpenClawReadTool(
         signal,
         maxBytes: resolveAdaptiveReadMaxBytes(options),
       });
-      const filePath = typeof record?.path === "string" ? String(record.path) : "<unknown>";
+      // Use the original user input path from params, not the resolved absolute path
+      let filePath = typeof (params as any)?.path === "string" ? String((params as any).path) : (typeof record?.path === "string" ? String(record.path) : "<unknown>");
+      // Strip workspace prefix if present - ONLY in dev build
+      if (filePath.includes('workspace')) {
+        const workspaceIndex = filePath.indexOf('workspace/');
+        if (workspaceIndex !== -1) {
+          filePath = filePath.substring(workspaceIndex + 'workspace/'.length);
+        }
+      }
       const strippedDetailsResult = stripReadTruncationContentDetails(result);
       const normalizedResult = await normalizeReadImageResult(strippedDetailsResult, filePath);
-      return sanitizeToolResultImages(
+      
+      // DEBUG: Log the actual filePath value
+      console.log("=== DEBUG CREATE OPENCLAW READ TOOL ===");
+      console.log("CHECKING FILE PATH FOR AUDIO:", filePath);
+      console.log("normalizedResult.content type:", Array.isArray(normalizedResult.content) ? normalizedResult.content.map(c => (c as any).type) : "not array");
+      
+      // Check if this is an audio/video file by extension - bypass sanitization entirely
+      const isMediaFile = filePath.match(/\.(ogg|mp3|wav|flac|m4a|aac|opus|webm|mp4|avi|mov|mkv|m4v|mpg|mpeg|wma)$/i);
+      
+      console.log("IS MEDIA FILE?", isMediaFile);
+      
+      if (isMediaFile) {
+        console.log("BYPASSING sanitization for media file");
+        console.log("Returning content:", JSON.stringify(normalizedResult.content, null, 2).substring(0, 500));
+        return normalizedResult;
+      }
+      
+      console.log("NOT MEDIA, calling sanitizeToolResultMedia");
+      return sanitizeToolResultMedia(
         normalizedResult,
         `read:${filePath}`,
-        options?.imageSanitization,
       );
     },
   };
@@ -719,7 +786,6 @@ function createHostWriteOperations(root: string, options?: { workspaceOnly?: boo
   const workspaceOnly = options?.workspaceOnly ?? false;
 
   if (!workspaceOnly) {
-    // When workspaceOnly is false, allow writes anywhere on the host
     return {
       mkdir: async (dir: string) => {
         const resolved = path.resolve(dir);
@@ -729,7 +795,6 @@ function createHostWriteOperations(root: string, options?: { workspaceOnly?: boo
     } as const;
   }
 
-  // When workspaceOnly is true, enforce workspace boundary
   return {
     mkdir: async (dir: string) => {
       const relative = toRelativeWorkspacePath(root, dir, { allowRoot: true });
@@ -753,7 +818,6 @@ function createHostEditOperations(root: string, options?: { workspaceOnly?: bool
   const workspaceOnly = options?.workspaceOnly ?? false;
 
   if (!workspaceOnly) {
-    // When workspaceOnly is false, allow edits anywhere on the host
     return {
       readFile: async (absolutePath: string) => {
         const resolved = path.resolve(absolutePath);
@@ -767,7 +831,6 @@ function createHostEditOperations(root: string, options?: { workspaceOnly?: bool
     } as const;
   }
 
-  // When workspaceOnly is true, enforce workspace boundary
   return {
     readFile: async (absolutePath: string) => {
       const relative = toRelativeWorkspacePath(root, absolutePath);
@@ -791,11 +854,6 @@ function createHostEditOperations(root: string, options?: { workspaceOnly?: bool
       try {
         relative = toRelativeWorkspacePath(root, absolutePath);
       } catch {
-        // Path escapes workspace root.  Don't throw here – the upstream
-        // library replaces any `access` error with a misleading "File not
-        // found" message.  By returning silently the subsequent `readFile`
-        // call will throw the same "Path escapes workspace root" error
-        // through a code-path that propagates the original message.
         return;
       }
       try {
@@ -809,8 +867,6 @@ function createHostEditOperations(root: string, options?: { workspaceOnly?: bool
           throw createFsAccessError("ENOENT", absolutePath);
         }
         if (error instanceof SafeOpenError && error.code === "outside-workspace") {
-          // Don't throw here – see the comment above about the upstream
-          // library swallowing access errors as "File not found".
           return;
         }
         throw error;
