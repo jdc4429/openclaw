@@ -95,7 +95,7 @@ async function installFfmpegLinux(): Promise<void> {
     console.error('❌ Failed to install ffmpeg automatically:', errorMessage);
     throw new Error(
       'ffmpeg is required but could not be installed automatically.\n' +
-      'Please run manually: sudo apt-get install ffmpeg'
+      'Please run manually: sudo apt-get install ffmpeg', { cause: err }
     );
   }
 }
@@ -172,7 +172,7 @@ async function downloadVideo(url: string, outputPath: string, ytDlpPath: string,
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error('❌ Download failed:', errorMessage);
-    throw new Error(`Failed to download video: ${errorMessage}`);
+    throw new Error(`Failed to download video: ${errorMessage}`, { cause: err });
   }
 }
 
