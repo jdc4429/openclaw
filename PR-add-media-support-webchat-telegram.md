@@ -98,6 +98,10 @@ None - all features are additive.
 .openclaw\workspace\openclaw\src\agents\tool-images.ts
 .openclaw\workspace\.openclaw-dev\src\agents\command\types.ts
 
+
+<img width="1250" height="896" alt="embeded-video" src="https://github.com/user-attachments/assets/f0eba12d-4406-41a4-b374-6868e681a898" />
+
+
 ## Example TOOLS.md
 
 # TOOLS.md - Local Environment Manifest
