@@ -32,15 +32,20 @@ function extractImages(message: unknown): ImageBlock[] {
   const content = m.content;
   const images: ImageBlock[] = [];
 
+  console.log("DEBUG extractImages: content =", content);
+
   if (Array.isArray(content)) {
     for (const block of content) {
+      console.log("DEBUG extractImages: block =", block);
       if (typeof block !== "object" || block === null) {
         continue;
       }
       const b = block as Record<string, unknown>;
 
       if (b.type === "image") {
+        console.log("DEBUG extractImages: found image block", b);
         const source = b.source as Record<string, unknown> | undefined;
+        console.log("DEBUG extractImages: source =", source);
         const filename = typeof b.url === "string" ? b.url.split('/').pop() || 'image' : 'image';
         const httpUrl = typeof b.url === "string" ? b.url : undefined;
         if (source?.type === "base64" && typeof source.data === "string") {
@@ -873,7 +878,7 @@ function renderGroupedMessage(
   const images = extractImages(message);
   const { audio: audioBlocks, video: videoBlocks } = extractAudioVideoBlocks(message);
   const hasImages = images.length > 0;
-  const hasMedia = audioBlocks.length > 0 || videoBlocks.length > 0;
+  const hasMedia = audioBlocks.length > 0 || videoBlocks.length > 0 || hasImages;
   const extractedText = extractTextCached(message);
   const extractedThinking =
     opts.showReasoning && role === "assistant" ? extractThinkingCached(message) : null;
@@ -909,7 +914,7 @@ function renderGroupedMessage(
 
   const hasActions = canCopyMarkdown || canExpand;
   const messageHasMedia = hasMediaContent(message) || audioBlocks.length > 0 || videoBlocks.length > 0;
-
+  console.log("DEBUG: messageHasMedia =", messageHasMedia, "hasImages =", hasImages, "hasMedia =", hasMedia);
   return html`
     <div class="${bubbleClasses}">
       ${hasActions

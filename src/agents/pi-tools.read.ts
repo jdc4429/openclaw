@@ -319,7 +319,7 @@ async function normalizeReadImageResult(
   console.log(`normalizeReadImageResult: filePath=${filePath}`);
   
   // Get absolute path
-  const workspaceRoot = '/home/jeffc/.openclaw/workspace';
+  const workspaceRoot = '/home/jeffc/.openclaw/workspace/.openclaw-dev/workspace';
   let absoluteFilePath = filePath;
   if (!path.isAbsolute(filePath) && !filePath.startsWith('/')) {
     absoluteFilePath = path.resolve(workspaceRoot, filePath);
@@ -329,15 +329,26 @@ async function normalizeReadImageResult(
   // Get file extension
   const ext = absoluteFilePath.toLowerCase().split('.').pop() || '';
   
-  // Define supported audio and video extensions
+  // Define supported image, audio and video extensions
+  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tiff', 'ico'];
   const audioExtensions = ['ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus', 'webm', 'wma'];
   const videoExtensions = ['mp4', 'webm', 'avi', 'mov', 'mkv', 'm4v', 'mpg', 'mpeg'];
   
+  const isImage = imageExtensions.includes(ext);
   const isAudio = audioExtensions.includes(ext);
   const isVideo = videoExtensions.includes(ext);
   
   // MIME type mapping
   const mimeTypes: Record<string, string> = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'bmp': 'image/bmp',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    'tiff': 'image/tiff',
+    'ico': 'image/x-icon',
     'ogg': 'audio/ogg',
     'mp3': 'audio/mpeg',
     'wav': 'audio/wav',
@@ -356,17 +367,34 @@ async function normalizeReadImageResult(
     'wma': 'audio/x-ms-wma',
   };
   
-  const mimeType = mimeTypes[ext] || (isAudio ? 'audio/ogg' : isVideo ? 'video/mp4' : '');
+  const mimeType = mimeTypes[ext] || (isImage ? 'image/jpeg' : isAudio ? 'audio/ogg' : isVideo ? 'video/mp4' : '');
   
-  if (isAudio || isVideo) {
+  if (isImage || isAudio || isVideo) {
     console.log(`DETECTED MEDIA FILE: ${absoluteFilePath} (${ext}) -> ${mimeType}`);
     
     const fileName = path.basename(absoluteFilePath);
-    const fileUrl = `http://localhost:18791/${filePath}`;
     
-    console.log(`Returning ${isAudio ? 'audio' : 'video'} block (streaming via URL)`);
-    
-    if (isAudio) {
+    if (isImage) {
+      // Read image file and convert to base64
+      const imageBuffer = await fs.readFile(absoluteFilePath);
+      const base64Data = imageBuffer.toString('base64');
+      
+      console.log(`Returning image block as base64 (length: ${base64Data.length})`);
+      
+      return {
+        ...result,
+        content: [{
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: mimeType,
+            data: base64Data
+          }
+        }] as unknown as AgentToolResult<unknown>["content"]
+      };
+    } else if (isAudio) {
+      const fileUrl = `http://localhost:18791/${filePath}`;
+      console.log(`Returning audio block (streaming via URL)`);
       return {
         ...result,
         content: [{
@@ -377,6 +405,8 @@ async function normalizeReadImageResult(
         }] as unknown as AgentToolResult<unknown>["content"]
       };
     } else {
+      const fileUrl = `http://localhost:18791/${filePath}`;
+      console.log(`Returning video block (streaming via URL)`);
       return {
         ...result,
         content: [{
@@ -712,12 +742,12 @@ export function createOpenClawReadTool(
       console.log("CHECKING FILE PATH FOR AUDIO:", filePath);
       console.log("normalizedResult.content type:", Array.isArray(normalizedResult.content) ? normalizedResult.content.map(c => (c as any).type) : "not array");
       
-      // Check if this is an audio/video file by extension - bypass sanitization entirely
-      const isMediaFile = filePath.match(/\.(ogg|mp3|wav|flac|m4a|aac|opus|webm|mp4|avi|mov|mkv|m4v|mpg|mpeg|wma)$/i);
+      // Check if this is an image/audio/video file - bypass sanitization entirely
+      const isAnyMedia = filePath.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg|tiff|ico|ogg|mp3|wav|flac|m4a|aac|opus|webm|mp4|avi|mov|mkv|m4v|mpg|mpeg|wma)$/i);
       
-      console.log("IS MEDIA FILE?", isMediaFile);
+      console.log("IS ANY MEDIA (image/audio/video)?", isAnyMedia);
       
-      if (isMediaFile) {
+      if (isAnyMedia) {
         console.log("BYPASSING sanitization for media file");
         console.log("Returning content:", JSON.stringify(normalizedResult.content, null, 2).substring(0, 500));
         return normalizedResult;
