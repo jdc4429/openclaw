@@ -97,7 +97,8 @@ None - all features are additive.
 .openclaw\workspace\openclaw\src\agents\tool-media.ts  
 .openclaw\workspace\openclaw\src\agents\tool-images.ts  
 .openclaw\workspace\.openclaw-dev\src\agents\command\types.ts  
-.openclaw\workspace\openclaw\src\gateway\chat.ts
+.openclaw\workspace\openclaw\src\gateway\chat.ts  
+.openclaw\workspace\openclaw\src\agents\tools\image-tool.ts
   
 ## Some Screenshots
 <br><br><br><br>
