@@ -103,6 +103,8 @@ None - all features are additive.
 
 <img width="1555" height="894" alt="Screenshot 2026-04-07 013354" src="https://github.com/user-attachments/assets/63de7368-2b85-4f58-9033-717de68af0bf" />
 
+<img width="1555" height="894" alt="Screenshot 2026-04-07 013354" src="https://github.com/user-attachments/assets/9e4a954d-bcb0-4b8c-972e-0c05b5aa734e" />
+
 ## Example TOOLS.md
 
 # TOOLS.md - Local Environment Manifest
