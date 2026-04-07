@@ -305,10 +305,8 @@ async function executeReadWithAdaptivePaging(params: {
 function rewriteReadImageHeader(text: string, mimeType: string, filePath?: string): string {
   const trimmedText = text.trim();
   if (trimmedText.startsWith("Read image file")) {
-    console.log("DEBUG rewriteReadImageHeader: Suppressing text:", JSON.stringify(text));
     return "";
   }
-  console.log("DEBUG rewriteReadImageHeader: Not suppressing text:", JSON.stringify(text), "trimmedText:", JSON.stringify(trimmedText), "startsWith?", trimmedText.startsWith("Read image file"));
   return text;
 }
 
@@ -316,7 +314,6 @@ async function normalizeReadImageResult(
   result: AgentToolResult<unknown>,
   filePath: string,
 ): Promise<AgentToolResult<unknown>> {
-  console.log(`normalizeReadImageResult: filePath=${filePath}`);
   
   // Get absolute path
   const workspaceRoot = '/home/jeffc/.openclaw/workspace/.openclaw-dev/workspace';
@@ -324,7 +321,6 @@ async function normalizeReadImageResult(
   if (!path.isAbsolute(filePath) && !filePath.startsWith('/')) {
     absoluteFilePath = path.resolve(workspaceRoot, filePath);
   }
-  console.log(`Absolute path: ${absoluteFilePath}`);
   
   // Get file extension
   const ext = absoluteFilePath.toLowerCase().split('.').pop() || '';
@@ -370,16 +366,12 @@ async function normalizeReadImageResult(
   const mimeType = mimeTypes[ext] || (isImage ? 'image/jpeg' : isAudio ? 'audio/ogg' : isVideo ? 'video/mp4' : '');
   
   if (isImage || isAudio || isVideo) {
-    console.log(`DETECTED MEDIA FILE: ${absoluteFilePath} (${ext}) -> ${mimeType}`);
-    
     const fileName = path.basename(absoluteFilePath);
     
     if (isImage) {
       // Read image file and convert to base64
       const imageBuffer = await fs.readFile(absoluteFilePath);
       const base64Data = imageBuffer.toString('base64');
-      
-      console.log(`Returning image block as base64 (length: ${base64Data.length})`);
       
       return {
         ...result,
@@ -396,7 +388,6 @@ async function normalizeReadImageResult(
       };
     } else if (isAudio) {
       const fileUrl = `http://localhost:18791/${filePath}`;
-      console.log(`Returning audio block (streaming via URL)`);
       return {
         ...result,
         content: [{
@@ -408,7 +399,6 @@ async function normalizeReadImageResult(
       };
     } else {
       const fileUrl = `http://localhost:18791/${filePath}`;
-      console.log(`Returning video block (streaming via URL)`);
       return {
         ...result,
         content: [{
@@ -739,23 +729,12 @@ export function createOpenClawReadTool(
       const strippedDetailsResult = stripReadTruncationContentDetails(result);
       const normalizedResult = await normalizeReadImageResult(strippedDetailsResult, filePath);
       
-      // DEBUG: Log the actual filePath value
-      console.log("=== DEBUG CREATE OPENCLAW READ TOOL ===");
-      console.log("CHECKING FILE PATH FOR AUDIO:", filePath);
-      console.log("normalizedResult.content type:", Array.isArray(normalizedResult.content) ? normalizedResult.content.map(c => (c as any).type) : "not array");
-      
       // Check if this is an image/audio/video file - bypass sanitization entirely
       const isAnyMedia = filePath.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg|tiff|ico|ogg|mp3|wav|flac|m4a|aac|opus|webm|mp4|avi|mov|mkv|m4v|mpg|mpeg|wma)$/i);
       
-      console.log("IS ANY MEDIA (image/audio/video)?", isAnyMedia);
-      
       if (isAnyMedia) {
-        console.log("BYPASSING sanitization for media file");
-        console.log("Returning content:", JSON.stringify(normalizedResult.content, null, 2).substring(0, 500));
         return normalizedResult;
       }
-      
-      console.log("NOT MEDIA, calling sanitizeToolResultMedia");
       return sanitizeToolResultMedia(
         normalizedResult,
         `read:${filePath}`,
