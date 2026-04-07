@@ -313,102 +313,45 @@ async function normalizeReadImageResult(
   result: AgentToolResult<unknown>,
   filePath: string,
 ): Promise<AgentToolResult<unknown>> {
+  const ext = filePath.toLowerCase().split('.').pop() || '';
+  const fileName = path.basename(filePath);
   
-  // Get absolute path - use the full system path
-  let absoluteFilePath = filePath;
-  if (!path.isAbsolute(filePath) && !filePath.startsWith('/')) {
-    // If it's a relative path, resolve it against current working directory
-    absoluteFilePath = path.resolve(process.cwd(), filePath);
-  }
-  
-  // Get file extension
-  const ext = absoluteFilePath.toLowerCase().split('.').pop() || '';
-  
-  // Define supported image, audio and video extensions
-  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tiff', 'ico'];
-  const audioExtensions = ['ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus', 'webm', 'wma'];
-  const videoExtensions = ['mp4', 'webm', 'avi', 'mov', 'mkv', 'm4v', 'mpg', 'mpeg'];
-  
-  const isImage = imageExtensions.includes(ext);
-  const isAudio = audioExtensions.includes(ext);
-  const isVideo = videoExtensions.includes(ext);
-  
-  // MIME type mapping
-  const mimeTypes: Record<string, string> = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'bmp': 'image/bmp',
-    'webp': 'image/webp',
-    'svg': 'image/svg+xml',
-    'tiff': 'image/tiff',
-    'ico': 'image/x-icon',
-    'ogg': 'audio/ogg',
-    'mp3': 'audio/mpeg',
-    'wav': 'audio/wav',
-    'flac': 'audio/flac',
-    'm4a': 'audio/mp4',
-    'aac': 'audio/aac',
-    'opus': 'audio/opus',
-    'webm': 'video/webm',
-    'mp4': 'video/mp4',
-    'avi': 'video/x-msvideo',
-    'mov': 'video/quicktime',
-    'mkv': 'video/x-matroska',
-    'm4v': 'video/x-m4v',
-    'mpg': 'video/mpeg',
-    'mpeg': 'video/mpeg',
-    'wma': 'audio/x-ms-wma',
-  };
-  
-  const mimeType = mimeTypes[ext] || (isImage ? 'image/jpeg' : isAudio ? 'audio/ogg' : isVideo ? 'video/mp4' : '');
-  
+  const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(ext);
+  const isAudio = ['ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus', 'webm'].includes(ext);
+  const isVideo = ['mp4', 'webm', 'avi', 'mov', 'mkv', 'm4v'].includes(ext);
+
   if (isImage || isAudio || isVideo) {
-    const fileName = path.basename(absoluteFilePath);
-    
+    const mimeTypes: Record<string, string> = {
+      'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif',
+      'webp': 'image/webp', 'svg': 'image/svg+xml', 'mp3': 'audio/mpeg', 'wav': 'audio/wav',
+      'mp4': 'video/mp4', 'webm': 'video/webm'
+    };
+    const mimeType = mimeTypes[ext] || 'application/octet-stream';
+
     if (isImage) {
-      // Read image file and convert to base64
-      const imageBuffer = await fs.readFile(absoluteFilePath);
-      const base64Data = imageBuffer.toString('base64');
-      
+      const imageBuffer = await fs.readFile(filePath);
       return {
         ...result,
         content: [{
           type: "image",
-          source: {
-            type: "base64",
-            media_type: mimeType,
-            data: base64Data
-          },
+          source: { type: "base64", media_type: mimeType, data: imageBuffer.toString('base64') },
           filename: fileName,
-          url: `http://localhost:18791/${absoluteFilePath}`
-        }] as unknown as AgentToolResult<unknown>["content"]
-      };
-    } else if (isAudio) {
-      return {
-        ...result,
-        content: [{
-          type: "audio",
-          url: `http://localhost:18791/${absoluteFilePath}`,
-          mimeType: mimeType,
-          filename: fileName
-        }] as unknown as AgentToolResult<unknown>["content"]
-      };
-    } else {
-      return {
-        ...result,
-        content: [{
-          type: "video",
-          url: `http://localhost:18791/${absoluteFilePath}`,
-          mimeType: mimeType,
-          filename: fileName
-        }] as unknown as AgentToolResult<unknown>["content"]
+          url: `http://localhost:18791${filePath}`
+        }] as any
       };
     }
+    
+    return {
+      ...result,
+      content: [{
+        type: isAudio ? "audio" : "video",
+        url: `http://localhost:18791${filePath}`,
+        mimeType: mimeType,
+        filename: fileName
+      }] as any
+    };
   }
   
-  // If we get here, return original result
   return result;
 }
 
@@ -645,7 +588,9 @@ export function createSandboxedReadTool(params: SandboxToolParams) {
   const base = createReadTool(params.root, {
     operations: createSandboxReadOperations(params),
   }) as unknown as AnyAgentTool;
+
   return createOpenClawReadTool(base, {
+    root: params.root, // ADD THIS LINE
     modelContextWindowTokens: params.modelContextWindowTokens,
     imageSanitization: params.imageSanitization,
   });
@@ -690,54 +635,69 @@ export function createHostWorkspaceEditTool(root: string, options?: { workspaceO
 
 export function createOpenClawReadTool(
   base: AnyAgentTool,
-  options?: OpenClawReadToolOptions,
+  options?: OpenClawReadToolOptions & { root?: string; containerWorkdir?: string },
 ): AnyAgentTool {
   return {
     ...base,
     execute: async (toolCallId, params, signal) => {
       const normalized = normalizeToolParams(params);
-      const record =
-        normalized ??
-        (params && typeof params === "object" ? (params as Record<string, unknown>) : undefined);
+      const record = normalized ?? (params && typeof params === "object" ? (params as Record<string, unknown>) : undefined);
       assertRequiredParams(record, CLAUDE_PARAM_GROUPS.read, base.name);
       
-      const result = await executeReadWithAdaptivePaging({
-        base,
-        toolCallId,
-        args: record ?? {},
-        signal,
-        maxBytes: resolveAdaptiveReadMaxBytes(options),
-      });
-      
-      // Get the original path from params
-      let filePath = typeof (params)?.path === "string" 
-        ? String((params).path) 
-        : (typeof record?.path === "string" ? String(record.path) : "<unknown>");
-      
-      // Strip everything up to the LAST 'workspace/' in the path
-      // This handles cases where 'workspace' appears multiple times in the absolute path
-      const lastWorkspaceIndex = filePath.lastIndexOf('/workspace/');
-      if (lastWorkspaceIndex !== -1) {
-        // Get everything after the last '/workspace/'
-        filePath = filePath.substring(lastWorkspaceIndex + '/workspace/'.length);
-      } else if (filePath.startsWith('workspace/')) {
-        // Handle relative paths that start with workspace/
-        filePath = filePath.substring('workspace/'.length);
+      // 1. Grab the raw absolute path from the agent
+      const absolutePath = typeof record?.path === "string" ? record.path : ".";
+
+      try {
+        const stats = await fs.stat(absolutePath);
+        if (stats.isDirectory()) {
+          return {
+            toolCallId,
+            content: [{ type: 'text', text: `Error: ${absolutePath} is a directory.` }],
+            details: { isError: true } as any
+          };
+        }
+
+        const ext = absolutePath.toLowerCase().split('.').pop() || '';
+        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+
+        if (isImage) {
+          const imageBuffer = await fs.readFile(absolutePath);
+          const mimeType = `image/${ext === 'svg' ? 'svg+xml' : ext === 'jpg' ? 'jpeg' : ext}`;
+          
+          return {
+            toolCallId,
+            content: [{
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: mimeType,
+                data: imageBuffer.toString('base64')
+              },
+              filename: path.basename(absolutePath),
+              // 2. THE FIX: Use the full absolutePath here, not just the filename
+              url: `http://localhost:18791${absolutePath}`
+            }] as any,
+            details: { path: absolutePath, size: stats.size } as any
+          };
+        }
+
+        // Fallback for non-media files
+        const result = await executeReadWithAdaptivePaging({
+          base,
+          toolCallId,
+          args: { ...record, path: absolutePath },
+          signal,
+          maxBytes: resolveAdaptiveReadMaxBytes(options),
+        });
+        return stripReadTruncationContentDetails(result);
+
+      } catch (err: any) {
+        return {
+          toolCallId,
+          content: [{ type: 'text', text: `Read failed: ${err.message}` }],
+          details: { isError: true, stack: err.stack } as any
+        };
       }
-      
-      const strippedDetailsResult = stripReadTruncationContentDetails(result);
-      const normalizedResult = await normalizeReadImageResult(strippedDetailsResult, filePath);
-      
-      // Check if this is an image/audio/video file - bypass sanitization entirely
-      const isAnyMedia = filePath.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg|tiff|ico|ogg|mp3|wav|flac|m4a|aac|opus|webm|mp4|avi|mov|mkv|m4v|mpg|mpeg|wma)$/i);
-      
-      if (isAnyMedia) {
-        return normalizedResult;
-      }
-      return sanitizeToolResultMedia(
-        normalizedResult,
-        `read:${filePath}`,
-      );
     },
   };
 }

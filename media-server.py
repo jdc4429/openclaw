@@ -32,14 +32,7 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
         return path
     
     def get_full_file_path(self, requested_path):
-        """Convert a request path to a full filesystem path by stripping workspace prefix"""
-        relative_path = self.strip_to_last_workspace(requested_path)
-        safe_path = os.path.normpath(os.path.join('.', relative_path))
-        resolved = os.path.abspath(safe_path)
-        current = os.path.abspath('.')
-        if not resolved.startswith(current):
-            return None
-        return safe_path
+        return requested_path
     
     def do_GET(self):
         """Handle GET requests"""
@@ -163,7 +156,7 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
         </div>
     </td>
     <td>
-        <button class="action-btn" onclick="window.open('/{media['path']}', '_blank')">▶ Open</button>
+        <button class="action-btn" onclick="window.open('{media['full_path']}', '_blank')">▶ Open</button>
         <button class="action-btn" onclick="copyToClipboard('{media['full_path']}')">📋 Copy Path</button>
     </td>
     <td><span class="badge badge-{media['type']}">{media['type']}</span></td>
