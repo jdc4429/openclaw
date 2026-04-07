@@ -11,6 +11,7 @@ import json
 import mimetypes
 import argparse
 import math
+import re
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, unquote, parse_qs
 import base64
@@ -22,6 +23,23 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.directory = os.getcwd()
         super().__init__(*args, **kwargs)
+    
+    def strip_to_last_workspace(self, path):
+        """Remove everything up to and including the last '/workspace/' in the path"""
+        match = re.search(r'/workspace/(.*)$', path)
+        if match:
+            return match.group(1)
+        return path
+    
+    def get_full_file_path(self, requested_path):
+        """Convert a request path to a full filesystem path by stripping workspace prefix"""
+        relative_path = self.strip_to_last_workspace(requested_path)
+        safe_path = os.path.normpath(os.path.join('.', relative_path))
+        resolved = os.path.abspath(safe_path)
+        current = os.path.abspath('.')
+        if not resolved.startswith(current):
+            return None
+        return safe_path
     
     def do_GET(self):
         """Handle GET requests"""
@@ -100,7 +118,7 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
                         mime_type = mime_map.get(ext, f'{media_type}/x-unknown')
                     
                     media_files.append({
-                        'path': rel_path_file,
+                        'path': self.strip_to_last_workspace(rel_path_file),
                         'full_path': abs_path,
                         'filename': file,
                         'mimeType': mime_type,
@@ -132,25 +150,27 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
             # Extract directory path and filename
             full_path = media['full_path']
             dir_path = os.path.dirname(full_path)
+            if not dir_path:
+                dir_path = "."
             filename = media['filename']
             
             file_list_html += f'''
-            <tr>
-                <td>
-                    <div class="file-info">
-                        <strong class="filename">{filename}</strong>
-                        <span class="filepath">{dir_path}</span>
-                    </div>
-                </td>
-                <td>
-                    <button class="action-btn" onclick="window.open('/{media['path']}', '_blank')">▶ Open</button>
-                    <button class="action-btn" onclick="copyToClipboard('{media['full_path']}')">📋 Copy Path</button>
-                </td>
-                <td><span class="badge badge-{media['type']}">{media['type']}</span></td>
-                <td>{media['mimeType']}</td>
-                <td>{self.format_size(media['size'])}</nc
-            </tr>
-            '''
+<tr>
+    <td>
+        <div class="file-info">
+            <strong class="filename">{filename}</strong>
+            <span class="filepath">{dir_path}</span>
+        </div>
+    </td>
+    <td>
+        <button class="action-btn" onclick="window.open('/{media['path']}', '_blank')">▶ Open</button>
+        <button class="action-btn" onclick="copyToClipboard('{media['full_path']}')">📋 Copy Path</button>
+    </td>
+    <td><span class="badge badge-{media['type']}">{media['type']}</span></td>
+    <td>{media['mimeType']}</td>
+    <td>{self.format_size(media['size'])}</td>
+</tr>
+'''
         
         if not file_list_html:
             file_list_html = '<tr><td colspan="5">No media files found in current directory (max depth: 2 folders)</td></tr>'
@@ -450,9 +470,9 @@ body {{
             self.send_error(400, 'Missing path parameter')
             return
         
-        # Security: prevent directory traversal
-        safe_path = os.path.normpath(os.path.join('.', media_path))
-        if not safe_path.startswith('.'):
+        # Strip workspace prefix and get the actual file path
+        safe_path = self.get_full_file_path(media_path)
+        if not safe_path:
             self.send_error(403, 'Access denied')
             return
         
@@ -511,19 +531,16 @@ body {{
     
     def serve_file_with_range(self, path):
         """Serve file with support for range requests (for seeking in audio/video)"""
-        # Security: prevent directory traversal
-        safe_path = os.path.normpath(os.path.join('.', path.lstrip('/')))
+        # Strip workspace prefix and get the actual file path
+        safe_path = self.get_full_file_path(path)
+        
+        if not safe_path:
+            self.send_error(403, 'Access denied')
+            return
         
         # Check if it's a directory
         if os.path.isdir(safe_path):
             self.send_error(404, 'Not found')
-            return
-        
-        # Security: ensure the resolved path is within the current directory
-        resolved = os.path.abspath(safe_path)
-        current = os.path.abspath('.')
-        if not resolved.startswith(current):
-            self.send_error(403, 'Access denied')
             return
         
         if not os.path.exists(safe_path):
