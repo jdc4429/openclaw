@@ -97,10 +97,11 @@ None - all features are additive.
 .openclaw\workspace\openclaw\src\agents\tool-media.ts
 .openclaw\workspace\openclaw\src\agents\tool-images.ts
 .openclaw\workspace\.openclaw-dev\src\agents\command\types.ts
-
+.openclaw\workspace\openclaw\src\gateway\chat.ts
 
 <img width="1250" height="896" alt="embeded-video" src="https://github.com/user-attachments/assets/f0eba12d-4406-41a4-b374-6868e681a898" />
 
+<img width="1555" height="894" alt="Screenshot 2026-04-07 013354" src="https://github.com/user-attachments/assets/63de7368-2b85-4f58-9033-717de68af0bf" />
 
 ## Example TOOLS.md
 
