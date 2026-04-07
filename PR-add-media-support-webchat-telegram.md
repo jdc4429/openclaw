@@ -65,7 +65,7 @@ Adds comprehensive media support to OpenClaw across multiple channels:
   
 ## Implementation details
   
-- Local HTTP media server (port 18791) for WebChat streaming
+- Local HTTP media server (port 18791) for WebChat streaming of local files.
 - Extension-based MIME mapping for audio/video
 - MIME detection for images
 - Image sanitization for both platforms
