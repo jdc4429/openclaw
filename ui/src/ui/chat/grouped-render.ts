@@ -103,6 +103,14 @@ function extractAudioVideoBlocks(message: unknown): { audio: AudioBlock[]; video
 
   for (let i = 0; i < content.length; i++) {
     const block = content[i];
+function extractAudioClips(message: unknown): AudioClip[] {
+  const m = message as Record<string, unknown>;
+  const content = m.content;
+  const clips: AudioClip[] = [];
+  if (!Array.isArray(content)) {
+    return clips;
+  }
+  for (const block of content) {
     if (typeof block !== "object" || block === null) {
       continue;
     }
@@ -902,7 +910,7 @@ function renderGroupedMessage(
 
   const jsonResult = markdown && !opts.isStreaming ? detectJson(markdown) : null;
 
-  const bubbleClasses = ["chat-bubble", opts.isStreaming ? "streaming" : "", "fade-in"]
+  const bubbleClasses = ["chat-bubble", opts.isStreaming ? "streaming" : "", "fade-in", canCopyMarkdown ? "has-copy" : ""]
     .filter(Boolean)
     .join(" ");
 
