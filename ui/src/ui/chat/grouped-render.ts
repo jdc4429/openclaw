@@ -32,22 +32,29 @@ function extractImages(message: unknown): ImageBlock[] {
   const content = m.content;
   const images: ImageBlock[] = [];
 
-  console.log("DEBUG extractImages: content =", content);
-
   if (Array.isArray(content)) {
     for (const block of content) {
-      console.log("DEBUG extractImages: block =", block);
       if (typeof block !== "object" || block === null) {
         continue;
       }
       const b = block as Record<string, unknown>;
 
       if (b.type === "image") {
-        console.log("DEBUG extractImages: found image block", b);
         const source = b.source as Record<string, unknown> | undefined;
-        console.log("DEBUG extractImages: source =", source);
-        const filename = typeof b.url === "string" ? b.url.split('/').pop() || 'image' : 'image';
-        const httpUrl = typeof b.url === "string" ? b.url : undefined;
+        // Get filename from the original filePath that was passed to normalizeReadImageResult
+        // Since b.url is undefined, we need to get the filename from elsewhere
+        // The httpUrl should be constructed from the filePath stored in the message
+        let filename = 'image';
+        let httpUrl = undefined;
+        
+        // Try to get filename from b.filename or from the media_path
+        if (typeof b.filename === "string") {
+          filename = b.filename;
+          httpUrl = `http://localhost:18791/${filename}`;
+        } else if (b.source && typeof b.source === "object") {
+          // No filename available, use a default
+          filename = 'image.jpg';
+        }
         if (source?.type === "base64" && typeof source.data === "string") {
           const data = source.data;
           const mediaType = (source.media_type as string) || "image/png";
@@ -707,8 +714,13 @@ function renderMessageMedia(audioBlocks: AudioBlock[], videoBlocks: VideoBlock[]
   for (let i = 0; i < videoBlocks.length; i++) {
     const video = videoBlocks[i];
     elements.push(html`
-      <div class="chat-media-wrapper">
-        <video controls class="chat-message-video" style="max-width: 100%; max-height: 480px;">
+      <div class="chat-media-wrapper" style="width: 100%; min-width: 480px; max-width: 854px;">
+        <video 
+          controls 
+          class="chat-message-video" 
+          style="width: 100%; min-width: 480px; max-width: 854px; height: auto; max-height: 480px;"
+          playsinline
+        >
           <source src=${video.data} type=${video.mimeType} />
           Your browser does not support the video element.
         </video>
@@ -721,7 +733,7 @@ function renderMessageMedia(audioBlocks: AudioBlock[], videoBlocks: VideoBlock[]
     return nothing;
   }
 
-  return html`<div class="chat-message-media">${elements}</div>`;
+  return html`<div class="chat-message-media" style="width: 100%;">${elements}</div>`;
 }
 
 function renderVideoEmbed(markdown: string) {
@@ -914,7 +926,6 @@ function renderGroupedMessage(
 
   const hasActions = canCopyMarkdown || canExpand;
   const messageHasMedia = hasMediaContent(message) || audioBlocks.length > 0 || videoBlocks.length > 0;
-  console.log("DEBUG: messageHasMedia =", messageHasMedia, "hasImages =", hasImages, "hasMedia =", hasMedia);
   return html`
     <div class="${bubbleClasses}">
       ${hasActions

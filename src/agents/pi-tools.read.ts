@@ -389,7 +389,9 @@ async function normalizeReadImageResult(
             type: "base64",
             media_type: mimeType,
             data: base64Data
-          }
+          },
+          filename: fileName,
+          url: `http://localhost:18791/${filePath}`
         }] as unknown as AgentToolResult<unknown>["content"]
       };
     } else if (isAudio) {
