@@ -86,25 +86,25 @@ None - all features are additive.
 
 #Added & Modified Files:
 
-.openclaw\workspace\openclaw\ui\src\styles\chat\grouped.css
-.openclaw\workspace\openclaw\ui\src\ui\chat\grouped-render.ts
-.openclaw\workspace\openclaw\src\gateway\control-ui-csp.ts
-.openclaw\workspace\openclaw\ui\src\ui\markdown.ts
-.openclaw\workspace\openclaw\src\agents\tools\download-video.ts
-.openclaw\workspace\openclaw\src\agents\pi-tools.ts
-.openclaw\workspace\openclaw\src\agents\pi-tools.read.ts
-.openclaw\workspace\openclaw\src\agents\image-sanitization.ts
-.openclaw\workspace\openclaw\src\agents\tool-media.ts
-.openclaw\workspace\openclaw\src\agents\tool-images.ts
-.openclaw\workspace\.openclaw-dev\src\agents\command\types.ts
-.openclaw\workspace\openclaw\src\gateway\chat.ts
+-.openclaw\workspace\openclaw\ui\src\styles\chat\grouped.css
+-.openclaw\workspace\openclaw\ui\src\ui\chat\grouped-render.ts
+-.openclaw\workspace\openclaw\src\gateway\control-ui-csp.ts
+-.openclaw\workspace\openclaw\ui\src\ui\markdown.ts
+-.openclaw\workspace\openclaw\src\agents\tools\download-video.ts
+-.openclaw\workspace\openclaw\src\agents\pi-tools.ts
+-.openclaw\workspace\openclaw\src\agents\pi-tools.read.ts
+-.openclaw\workspace\openclaw\src\agents\image-sanitization.ts
+-.openclaw\workspace\openclaw\src\agents\tool-media.ts
+-.openclaw\workspace\openclaw\src\agents\tool-images.ts
+-.openclaw\workspace\.openclaw-dev\src\agents\command\types.ts
+-.openclaw\workspace\openclaw\src\gateway\chat.ts
 <br><br><br><br>
 
 ## Some Screenshots
 <br><br><br><br>
-<img width="1250" height="896" alt="embeded-video" src="https://github.com/user-attachments/assets/f0eba12d-4406-41a4-b374-6868e681a898" />
+<img width="1250" height="894" alt="embeded-video" src="https://github.com/user-attachments/assets/f0eba12d-4406-41a4-b374-6868e681a898" />
 
-<img width="1555" height="894" alt="Screenshot 2026-04-07 013354" src="https://github.com/user-attachments/assets/63de7368-2b85-4f58-9033-717de68af0bf" />
+<img width="1250" height="894" alt="Screenshot 2026-04-07 013354" src="https://github.com/user-attachments/assets/63de7368-2b85-4f58-9033-717de68af0bf" />
 
 <img width="948" height="908" alt="Screenshot 2026-04-07 013658" src="https://github.com/user-attachments/assets/178e2057-e52a-47aa-9736-8b153137c387" />
 
