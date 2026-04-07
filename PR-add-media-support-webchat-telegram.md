@@ -118,7 +118,7 @@ None - all features are additive.
 - **Status Check:** If media server not responding, start with:
 
 ```bash
-python3 /home/jeffc/.openclaw/workspace-sasha-main/media-server.py --port 18791 --max-depth 2
+python3 /home/openclaw/.openclaw/workspace/media-server.py --port 18791 --max-depth 2
 ```
 
 - Supported Audio Formats: MP3, WAV, OGG, FLAC, M4A, AAC, OPUS, WMA
