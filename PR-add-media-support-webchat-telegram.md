@@ -85,7 +85,7 @@ None - all features are additive.
 ## Modifications to add image, audio, and video to webchat.
 
 #Added & Modified Files:
-<br><br><br><br>
+
 .openclaw\workspace\openclaw\ui\src\styles\chat\grouped.css
 .openclaw\workspace\openclaw\ui\src\ui\chat\grouped-render.ts
 .openclaw\workspace\openclaw\src\gateway\control-ui-csp.ts
@@ -98,7 +98,7 @@ None - all features are additive.
 .openclaw\workspace\openclaw\src\agents\tool-images.ts
 .openclaw\workspace\.openclaw-dev\src\agents\command\types.ts
 .openclaw\workspace\openclaw\src\gateway\chat.ts
-
+<br><br><br><br>
 
 ## Some Screenshots
 <br><br><br><br>
