@@ -1,7 +1,3 @@
-# Recommended to run in your OpenClaw's workspace - Modify path if not workspace
-# This is needed if you want to stream local content to your webchat session
-# Images are sent via Data base64 embeding. All other media is streamed.
-#
 #!/usr/bin/env python3
 """
 Simple Media Server for WebChat
@@ -36,14 +32,13 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
         # Handle API endpoints
         if path == '/api/list':
             page = int(query_params.get('page', [1])[0])
-            per_page = int(query_params.get('per_page', [20])[0])
+            per_page = int(query_params.get('per_page', [34])[0])
             self.handle_list_media(page, per_page)
         elif path == '/api/media-info':
             self.handle_media_info(parsed_path.query)
         elif path == '/' or path == '':
             # Serve status page with file listing
-            page = int(query_params.get('page', [1])[0])
-            self.serve_status_page(page)
+            self.serve_status_page()
         else:
             # Serve files normally with range support
             self.serve_file_with_range(path)
@@ -83,6 +78,8 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
                 if media_type:
                     full_path = os.path.join(root, file)
                     rel_path_file = os.path.relpath(full_path, '.')
+                    # Get the full absolute path
+                    abs_path = os.path.abspath(full_path)
                     mime_type, _ = mimetypes.guess_type(file)
                     if not mime_type:
                         mime_map = {
@@ -104,6 +101,7 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
                     
                     media_files.append({
                         'path': rel_path_file,
+                        'full_path': abs_path,
                         'filename': file,
                         'mimeType': mime_type,
                         'type': media_type,
@@ -123,59 +121,39 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
             size /= 1024.0
         return f"{size:.1f} TB"
     
-    def serve_status_page(self, page=1):
-        """Serve a status page with paginated file listing"""
-        per_page = 20
-        all_media = self.get_media_file_list(max_depth=2)
+    def serve_status_page(self):
+        """Serve a status page with full file listing (no pagination)"""
+        all_media = self.get_media_file_list(max_depth=getattr(global_args, 'max_depth', 2))
         total_files = len(all_media)
-        total_pages = math.ceil(total_files / per_page) if total_files > 0 else 1
         
-        # Ensure page is within bounds
-        page = max(1, min(page, total_pages))
-        
-        # Get paginated files
-        start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        media_files = all_media[start_idx:end_idx]
-        
-        # Generate file listing HTML
+        # Generate file listing HTML with compact spacing
         file_list_html = ''
-        for media in media_files:
+        for media in all_media:
+            # Extract directory path and filename
+            full_path = media['full_path']
+            dir_path = os.path.dirname(full_path)
+            filename = media['filename']
+            
             file_list_html += f'''
             <tr>
-                <td><a href="/{media['path']}" target="_blank">{media['filename']}</a></td>
+                <td>
+                    <div class="file-info">
+                        <strong class="filename">{filename}</strong>
+                        <span class="filepath">{dir_path}</span>
+                    </div>
+                </td>
+                <td>
+                    <button class="action-btn" onclick="window.open('/{media['path']}', '_blank')">▶ Open</button>
+                    <button class="action-btn" onclick="copyToClipboard('{media['full_path']}')">📋 Copy Path</button>
+                </td>
                 <td><span class="badge badge-{media['type']}">{media['type']}</span></td>
                 <td>{media['mimeType']}</td>
-                <td>{self.format_size(media['size'])}</td>
+                <td>{self.format_size(media['size'])}</nc
             </tr>
             '''
         
         if not file_list_html:
-            file_list_html = '<tr><td colspan="4">No media files found in current directory (max depth: 2 folders)</td></tr>'
-        
-        # Generate pagination HTML
-        pagination_html = ''
-        if total_pages > 1:
-            pagination_html = '<div class="pagination">'
-            
-            # Previous button
-            if page > 1:
-                pagination_html += f'<a href="/?page={page-1}">&laquo; Previous</a>'
-            
-            # Page numbers
-            start_page = max(1, page - 2)
-            end_page = min(total_pages, page + 2)
-            for p in range(start_page, end_page + 1):
-                if p == page:
-                    pagination_html += f'<span class="active">{p}</span>'
-                else:
-                    pagination_html += f'<a href="/?page={p}">{p}</a>'
-            
-            # Next button
-            if page < total_pages:
-                pagination_html += f'<a href="/?page={page+1}">Next &raquo;</a>'
-            
-            pagination_html += '</div>'
+            file_list_html = '<tr><td colspan="5">No media files found in current directory (max depth: 2 folders)</td></tr>'
         
         html = f'''<!DOCTYPE html>
 <html>
@@ -183,130 +161,244 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
     <title>OpenClaw Media Server</title>
     <meta charset="utf-8">
     <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f5f5f5;
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }}
-        h1 {{
-            color: #333;
+body {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0px 0px 0px 0px;
+    background: #121212;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}}
+        .header {{
+            position: sticky;
+            top: 0;
+            background: #121212;
+            z-index: 10;
+            padding: 10px 20px 0 20px;
+        }}
+.content {{
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}}
+.content::-webkit-scrollbar {{
+    display: none;
+}}        h1 {{
+            color: #4CAF50;
             border-bottom: 2px solid #4CAF50;
-            padding-bottom: 10px;
+            padding-bottom: 5px;
+            margin: 0 0 10px 0;
+            font-size: 1.8em;
         }}
         .status {{
             background: #4CAF50;
             color: white;
-            padding: 10px;
+            padding: 6px;
             border-radius: 5px;
-            margin: 10px 0;
+            margin: 0 0 6px 0;
+            font-size: 14px;
         }}
         .stats {{
             background: #2196F3;
             color: white;
-            padding: 8px;
+            padding: 6px;
             border-radius: 5px;
-            margin: 10px 0;
+            margin: 0 0 6px 0;
             font-size: 14px;
         }}
         table {{
             width: 100%;
             border-collapse: collapse;
-            background: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: #1e1e1e;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            margin: 0 0 8px 0;
         }}
         th, td {{
-            padding: 12px;
+            padding: 3px 6px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #4a4a4a;
+            vertical-align: middle;
         }}
         th {{
-            background: #4CAF50;
-            color: white;
+            background: #1e3a2f;
+            color: #4CAF50;
+            padding: 5px 6px;
+            font-size: 13px;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
         }}
         tr:hover {{
-            background: #f5f5f5;
+            background: #2a2a2a;
+        }}
+        .file-info {{
+            display: flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 8px;
+        }}
+        .filename {{
+            font-size: 14px;
+            font-weight: bold;
+            color: #ffffff;
+        }}
+        .filepath {{
+            font-size: 12px;
+            color: #b0b0b0;
+            font-family: monospace;
+        }}
+        .action-btn {{
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            margin: 0 4px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background 0.2s;
+        }}
+        .action-btn:hover {{
+            background: #45a049;
+            transform: translateY(-1px);
+        }}
+        .action-btn:active {{
+            transform: translateY(1px);
         }}
         .footer {{
-            margin-top: 20px;
+            margin-top: 12px;
             text-align: center;
-            color: #666;
+            color: #999;
             font-size: 12px;
+            margin-bottom: 10px;
         }}
         .badge {{
             display: inline-block;
-            padding: 2px 8px;
+            padding: 2px 6px;
             border-radius: 3px;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: bold;
         }}
-        .badge-audio {{ background: #2196F3; color: white; }}
-        .badge-video {{ background: #9C27B0; color: white; }}
-        .badge-image {{ background: #FF9800; color: white; }}
-        .pagination {{
-            margin: 20px 0;
+        .badge-audio {{ background: #3498db; color: white; }}
+        .badge-video {{ background: #9b59b6; color: white; }}
+        .badge-image {{ background: #e67e22; color: white; }}
+        .depth-info {{
+            background: #9b59b6;
+            color: white;
+            padding: 6px;
+            border-radius: 5px;
+            margin: 6px 0 6px 0;
+            font-size: 14px;
             text-align: center;
         }}
-        .pagination a, .pagination span {{
-            display: inline-block;
-            padding: 8px 12px;
-            margin: 0 4px;
-            text-decoration: none;
-            border: 1px solid #ddd;
-            background: white;
-            border-radius: 4px;
-        }}
-        .pagination a:hover {{
-            background: #4CAF50;
+        .depth-info code {{
+            background: rgba(0,0,0,0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
             color: white;
+            font-weight: bold;
+            position: relative;
+            top: -1px;
         }}
-        .pagination .active {{
-            background: #4CAF50;
-            color: white;
+        .depth-info code:hover {{
+            background: rgba(0,0,0,0.3);
+        }}
+        .toast {{
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #1a1a1a;
+            color: #4CAF50;
+            text-align: center;
+            border-radius: 2px;
+            padding: 12px;
+            position: fixed;
+            z-index: 1000;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 13px;
             border: 1px solid #4CAF50;
         }}
-        .depth-info {{
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
+        .toast.show {{
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }}
+        @keyframes fadein {{
+            from {{bottom: 0; opacity: 0;}}
+            to {{bottom: 30px; opacity: 1;}}
+        }}
+        @keyframes fadeout {{
+            from {{bottom: 30px; opacity: 1;}}
+            to {{bottom: 0; opacity: 0;}}
         }}
     </style>
 </head>
 <body>
-    <h1>🎵 OpenClaw Media Server</h1>
-    <div class="status">
-        ✅ Media server is running | Port: {getattr(global_args, 'port', 18791)} | Directory: {os.getcwd()}
+    <div id="toast" class="toast"></div>
+    
+    <div class="header">
+        <h1>🎵 OpenClaw Media Server</h1>
+        <div class="status">
+            ✅ Media server is running | Port: {getattr(global_args, 'port', 18791)} | Directory: {os.getcwd()}
+        </div>
+        <div class="stats">
+            📊 Total media files: {total_files}
+        </div>
+        <div class="depth-info">
+            Depth: {getattr(global_args, 'max_depth', 2)}&nbsp;&nbsp; Change Depth: <code>python3 media_server.py --max-depth 5</code> &nbsp;&nbsp; Change Port: <code>python3 media_server.py --port 8080</code> &nbsp;&nbsp; Change Dir: <code>python3 media_server.py --directory /path/to/media</code>
+        </div>
     </div>
-    <div class="stats">
-        📊 Total media files: {total_files} (limited to 2 directory levels deep) | Page {page} of {total_pages} | Showing {len(media_files)} files
-    </div>
     
-    <h2>📁 Media Files</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Filename</th>
-                <th>Type</th>
-                <th>MIME Type</th>
-                <th>Size</th>
-            </tr>
-        </thead>
-        <tbody>
-            {file_list_html}
-        </tbody>
-    </table>
-    
-    {pagination_html}
-    
-    <div class="depth-info">
-        ⓘ Only scanning 2 directory levels deep. Files in deeper folders are not shown.
+    <div class="content">
+        <table>
+            <thead>
+                <tr>
+                    <th>Filename & Path</th>
+                    <th>Actions</th>
+                    <th>Type</th>
+                    <th>MIME Type</th>
+                    <th>Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                {file_list_html}
+            </tbody>
+        </table>
     </div>
     
     <div class="footer">
-        <p>OpenClaw Media Server - Supports seeking, streaming, and CORS</p>
-        <p>📷 Images | 🎵 Audio (mp3, wav, ogg, flac, m4a, aac, opus, wma) | 🎬 Video (mp4, webm, avi, mov, mkv, m4v, mpg, mpeg)</p>
+        <p>OpenClaw Media Server - Supports seeking, streaming, and CORS &nbsp;|&nbsp; 📷 Images (jpg, jpeg, png, gif, webp, svg, bmp) &nbsp;&nbsp;|&nbsp; 🎵 Audio (mp3, wav, ogg, flac, m4a, aac, opus, wma) &nbsp;&nbsp;|&nbsp; 🎬 Video (mp4, webm, avi, mov, mkv, m4v, mpg, mpeg)</p>
     </div>
+    
+    <script>
+        function copyToClipboard(text) {{
+            navigator.clipboard.writeText(text).then(function() {{
+                var toast = document.getElementById("toast");
+                toast.textContent = "✓ Copied: " + text;
+                toast.className = "toast show";
+                setTimeout(function(){{ toast.className = toast.className.replace("show", ""); }}, 3000);
+            }}, function(err) {{
+                console.error('Could not copy text: ', err);
+                var toast = document.getElementById("toast");
+                toast.textContent = "❌ Failed to copy";
+                toast.className = "toast show";
+                setTimeout(function(){{ toast.className = toast.className.replace("show", ""); }}, 3000);
+            }});
+        }}
+    </script>
 </body>
 </html>'''
         
@@ -316,9 +408,9 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html.encode())
     
-    def handle_list_media(self, page=1, per_page=20):
+    def handle_list_media(self, page=1, per_page=34):
         """Return JSON list of media files with pagination"""
-        all_media = self.get_media_file_list(max_depth=2)
+        all_media = self.get_media_file_list(max_depth=getattr(global_args, 'max_depth', 2))
         total_files = len(all_media)
         total_pages = math.ceil(total_files / per_page) if total_files > 0 else 1
         
@@ -401,6 +493,7 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
             
             response = {
                 'path': media_path,
+                'full_path': os.path.abspath(safe_path),
                 'mimeType': mime_type,
                 'size': len(media_data),
                 'base64': base64_data,
@@ -419,7 +512,6 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
     def serve_file_with_range(self, path):
         """Serve file with support for range requests (for seeking in audio/video)"""
         # Security: prevent directory traversal
-        # Normalize the path and ensure it's within the current directory
         safe_path = os.path.normpath(os.path.join('.', path.lstrip('/')))
         
         # Check if it's a directory
@@ -428,7 +520,6 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
             return
         
         # Security: ensure the resolved path is within the current directory
-        # (don't allow ../ to escape)
         resolved = os.path.abspath(safe_path)
         current = os.path.abspath('.')
         if not resolved.startswith(current):
@@ -556,8 +647,9 @@ def main():
     print(f"   - Range requests for seeking in audio/video")
     print(f"   - CORS enabled")
     print(f"   - No file size limits")
-    print(f"   - Paginated file listing (20 per page)")
+    print(f"   - Full file list (no pagination)")
     print(f"   - Limited to {args.max_depth} directory depth")
+    print(f"   - Full file path displayed for each file")
     print(f"\n   Press Ctrl+C to stop\n")
     
     try:

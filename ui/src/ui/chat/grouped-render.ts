@@ -4,7 +4,6 @@ import { getSafeLocalStorage } from "../../local-storage.ts";
 import type { AssistantIdentity } from "../assistant-identity.ts";
 import { icons } from "../icons.ts";
 import { toSanitizedMarkdownHtml } from "../markdown.ts";
-import { openExternalUrlSafe } from "../open-external-url.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import type { MessageGroup, ToolCard } from "../types/chat-types.ts";
 import { agentLogoUrl } from "../views/agents-utils.ts";
@@ -44,16 +43,16 @@ function extractImages(message: unknown): ImageBlock[] {
         // Get filename from the original filePath that was passed to normalizeReadImageResult
         // Since b.url is undefined, we need to get the filename from elsewhere
         // The httpUrl should be constructed from the filePath stored in the message
-        let filename = 'image';
+        let filename = "image";
         let httpUrl = undefined;
-        
+
         // Try to get filename from b.filename or from the media_path
         if (typeof b.filename === "string") {
           filename = b.filename;
           httpUrl = `http://localhost:18791/${filename}`;
         } else if (b.source && typeof b.source === "object") {
           // No filename available, use a default
-          filename = 'image.jpg';
+          filename = "image.jpg";
         }
         if (source?.type === "base64" && typeof source.data === "string") {
           const data = source.data;
@@ -67,7 +66,7 @@ function extractImages(message: unknown): ImageBlock[] {
         const imageUrl = b.image_url as Record<string, unknown> | undefined;
         if (typeof imageUrl?.url === "string") {
           const urlPath = imageUrl.url;
-          const filename = urlPath.split('/').pop() || 'image';
+          const filename = urlPath.split("/").pop() || "image";
           images.push({ url: imageUrl.url, filename, httpUrl: imageUrl.url });
         }
       }
@@ -113,16 +112,19 @@ function extractAudioVideoBlocks(message: unknown): { audio: AudioBlock[]; video
         audio.push({
           type: "audio",
           data: b.url,
-          mimeType: b.mimeType as string || "audio/ogg",
-          filename: b.filename as string || undefined
+          mimeType: typeof b.mimeType === "string" ? b.mimeType : "audio/ogg",
+          filename: typeof b.filename === "string" ? b.filename : undefined,
         });
       } else if (typeof b.data === "string") {
-        const dataUrl = b.data.startsWith("data:") ? b.data : `data:${b.mimeType || "audio/ogg"};base64,${b.data}`;
+        const mimeTypeValue = typeof b.mimeType === "string" ? b.mimeType : "audio/ogg";
+        const dataUrl = b.data.startsWith("data:")
+          ? b.data
+          : `data:${mimeTypeValue};base64,${b.data}`;
         audio.push({
           type: "audio",
           data: dataUrl,
-          mimeType: b.mimeType as string || "audio/ogg",
-          filename: b.filename as string || undefined
+          mimeType: mimeTypeValue,
+          filename: typeof b.filename === "string" ? b.filename : undefined,
         });
       }
     }
@@ -132,20 +134,24 @@ function extractAudioVideoBlocks(message: unknown): { audio: AudioBlock[]; video
         video.push({
           type: "video",
           data: b.url,
-          mimeType: b.mimeType as string || "video/mp4",
-          filename: b.filename as string || undefined
+          mimeType: typeof b.mimeType === "string" ? b.mimeType : "video/mp4",
+          filename: typeof b.filename === "string" ? b.filename : undefined,
         });
       } else if (typeof b.data === "string") {
-        const dataUrl = b.data.startsWith("data:") ? b.data : `data:${b.mimeType || "video/mp4"};base64,${b.data}`;
+        const mimeTypeValue = typeof b.mimeType === "string" ? b.mimeType : "video/mp4";
+        const dataUrl = b.data.startsWith("data:")
+          ? b.data
+          : `data:${mimeTypeValue};base64,${b.data}`;
         video.push({
           type: "video",
           data: dataUrl,
-          mimeType: b.mimeType as string || "video/mp4",
-          filename: b.filename as string || undefined
+          mimeType: mimeTypeValue,
+          filename: typeof b.filename === "string" ? b.filename : undefined,
         });
       }
     }
   }
+
   return { audio, video };
 }
 
@@ -656,9 +662,7 @@ function renderAvatar(
 }
 
 function isAvatarUrl(value: string): boolean {
-  return (
-    /^https?:\/\//i.test(value) || /^data:image\//i.test(value) || value.startsWith("/")
-  );
+  return /^https?:\/\//i.test(value) || /^data:image\//i.test(value) || value.startsWith("/");
 }
 
 function renderMessageImages(images: ImageBlock[]) {
@@ -684,6 +688,7 @@ function renderMessageImages(images: ImageBlock[]) {
                   rel="noopener noreferrer"
                   class="chat-image-filename"
                   title="Open full-size image"
+                  style="display: block; text-align: center; width: 100%;"
                 >
                   ${img.filename}
                 </a>`
@@ -715,9 +720,9 @@ function renderMessageMedia(audioBlocks: AudioBlock[], videoBlocks: VideoBlock[]
     const video = videoBlocks[i];
     elements.push(html`
       <div class="chat-media-wrapper" style="width: 100%; min-width: 480px; max-width: 854px;">
-        <video 
-          controls 
-          class="chat-message-video" 
+        <video
+          controls
+          class="chat-message-video"
           style="width: 100%; min-width: 480px; max-width: 854px; height: auto; max-height: 480px;"
           playsinline
         >
@@ -743,7 +748,7 @@ function renderVideoEmbed(markdown: string) {
     const embedUrl = `https://www.youtube.com/embed/${watchMatch[1]}`;
     return html`
       <div class="video-embed-container">
-        <iframe 
+        <iframe
           src=${embedUrl}
           frameborder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -754,14 +759,16 @@ function renderVideoEmbed(markdown: string) {
       </div>
     `;
   }
-  
+
   // Look for YouTube embed URLs
-  const youtubeMatch = markdown.match(/https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+  const youtubeMatch = markdown.match(
+    /https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]+)/,
+  );
   if (youtubeMatch) {
     const embedUrl = `https://www.youtube.com/embed/${youtubeMatch[1]}`;
     return html`
       <div class="video-embed-container">
-        <iframe 
+        <iframe
           src=${embedUrl}
           frameborder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -772,14 +779,14 @@ function renderVideoEmbed(markdown: string) {
       </div>
     `;
   }
-  
+
   // Look for Vimeo embed URLs
   const vimeoMatch = markdown.match(/https?:\/\/(?:www\.)?player\.vimeo\.com\/video\/(\d+)/);
   if (vimeoMatch) {
     const embedUrl = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
     return html`
       <div class="video-embed-container">
-        <iframe 
+        <iframe
           src=${embedUrl}
           frameborder="0"
           allow="autoplay; fullscreen; picture-in-picture"
@@ -789,7 +796,7 @@ function renderVideoEmbed(markdown: string) {
       </div>
     `;
   }
-  
+
   return nothing;
 }
 
@@ -925,7 +932,8 @@ function renderGroupedMessage(
     markdown && !toolSummaryLabel ? markdown.trim().replace(/\s+/g, " ").slice(0, 120) : "";
 
   const hasActions = canCopyMarkdown || canExpand;
-  const messageHasMedia = hasMediaContent(message) || audioBlocks.length > 0 || videoBlocks.length > 0;
+  const messageHasMedia =
+    hasMediaContent(message) || audioBlocks.length > 0 || videoBlocks.length > 0;
   return html`
     <div class="${bubbleClasses}">
       ${hasActions
@@ -947,8 +955,7 @@ function renderGroupedMessage(
                     : nothing}
               </summary>
               <div class="chat-tool-msg-body">
-                ${renderMessageImages(images)}
-                ${renderMessageMedia(audioBlocks, videoBlocks)}
+                ${renderMessageImages(images)} ${renderMessageMedia(audioBlocks, videoBlocks)}
                 ${reasoningMarkdown
                   ? html`<div class="chat-thinking">
                       ${unsafeHTML(toSanitizedMarkdownHtml(reasoningMarkdown))}
@@ -964,12 +971,13 @@ function renderGroupedMessage(
                     </details>`
                   : markdown
                     ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">
-                        ${markdown.trim().startsWith('<audio') 
+                        ${markdown.trim().startsWith("<audio")
                           ? unsafeHTML(markdown)
-                          : (markdown.includes('youtube.com/watch') || markdown.includes('youtube.com/embed') || markdown.includes('player.vimeo.com'))
+                          : markdown.includes("youtube.com/watch") ||
+                              markdown.includes("youtube.com/embed") ||
+                              markdown.includes("player.vimeo.com")
                             ? renderVideoEmbed(markdown)
-                            : unsafeHTML(toSanitizedMarkdownHtml(markdown))
-                        }
+                            : unsafeHTML(toSanitizedMarkdownHtml(markdown))}
                       </div>`
                     : nothing}
                 ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}
@@ -977,8 +985,7 @@ function renderGroupedMessage(
             </details>
           `
         : html`
-            ${renderMessageImages(images)}
-            ${renderMessageMedia(audioBlocks, videoBlocks)}
+            ${renderMessageImages(images)} ${renderMessageMedia(audioBlocks, videoBlocks)}
             ${reasoningMarkdown
               ? html`<div class="chat-thinking">
                   ${unsafeHTML(toSanitizedMarkdownHtml(reasoningMarkdown))}
@@ -994,12 +1001,13 @@ function renderGroupedMessage(
                 </details>`
               : markdown
                 ? html`<div class="chat-text" dir="${detectTextDirection(markdown)}">
-                    ${markdown.trim().startsWith('<audio') 
+                    ${markdown.trim().startsWith("<audio")
                       ? unsafeHTML(markdown)
-                      : (markdown.includes('youtube.com/watch') || markdown.includes('youtube.com/embed') || markdown.includes('player.vimeo.com'))
+                      : markdown.includes("youtube.com/watch") ||
+                          markdown.includes("youtube.com/embed") ||
+                          markdown.includes("player.vimeo.com")
                         ? renderVideoEmbed(markdown)
-                        : unsafeHTML(toSanitizedMarkdownHtml(markdown))
-                    }
+                        : unsafeHTML(toSanitizedMarkdownHtml(markdown))}
                   </div>`
                 : nothing}
             ${hasToolCards ? renderCollapsedToolCards(toolCards, onOpenSidebar) : nothing}

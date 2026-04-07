@@ -19,6 +19,7 @@ import {
   type MemorySource,
 } from "openclaw/plugin-sdk/memory-core-host-engine-storage";
 import { MemoryManagerSyncOps } from "./manager-sync-ops.js";
+import type { VectorWriteDb } from "./manager-vector-write.js";
 import { replaceMemoryVectorRow } from "./manager-vector-write.js";
 
 const VECTOR_TABLE = "chunks_vec";
@@ -638,7 +639,7 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
         );
       if (vectorReady && embedding.length > 0) {
         replaceMemoryVectorRow({
-          db: this.db,
+          db: this.db as unknown as VectorWriteDb,
           tableName: VECTOR_TABLE,
           id,
           embedding,

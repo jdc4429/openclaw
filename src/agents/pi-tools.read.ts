@@ -11,7 +11,6 @@ import {
 } from "../infra/fs-safe.js";
 import { trySafeFileURLToPath } from "../infra/local-file-access.js";
 import { detectMime } from "../media/mime.js";
-import { sniffMimeFromBase64 } from "../media/sniff-mime-from-base64.js";
 import type { ImageSanitizationLimits } from "./image-sanitization.js";
 import { toRelativeWorkspacePath } from "./path-policy.js";
 import { wrapEditToolWithRecovery } from "./pi-tools.host-edit.js";
@@ -24,9 +23,25 @@ import {
 import type { AnyAgentTool } from "./pi-tools.types.js";
 import { assertSandboxPath } from "./sandbox-paths.js";
 import type { SandboxFsBridge } from "./sandbox/fs-bridge.js";
-import { sanitizeToolResultImages } from "./tool-images.js";
+import { type TextContentBlock } from "./tool-images.js";
 import { sanitizeToolResultMedia } from "./tool-media.js";
-import type { AudioContent, VideoContent } from "./command/types.js";
+
+// Helper functions for tool parameter normalization
+const normalizeToolParams = (params: unknown): Record<string, unknown> | undefined => {
+  if (!params) {
+    return undefined;
+  }
+  if (typeof params === "object") {
+    return params as Record<string, unknown>;
+  }
+  return undefined;
+};
+
+const CLAUDE_PARAM_GROUPS = {
+  read: [{ keys: ["path"] }] as const,
+  write: [{ keys: ["path", "content"] }] as const,
+  edit: [{ keys: ["file_path", "old_string", "new_string"] }] as const,
+};
 
 export {
   REQUIRED_PARAM_GROUPS,
@@ -38,10 +53,6 @@ export {
 // NOTE(steipete): Upstream read now does file-magic MIME detection; we keep the wrapper
 // to sanitize oversized images before they hit providers.
 type ToolContentBlock = AgentToolResult<unknown>["content"][number];
-type ImageContentBlock = Extract<ToolContentBlock, { type: "image" }>;
-type TextContentBlock = Extract<ToolContentBlock, { type: "text" }>;
-// Extended content types that include audio/video support
-type ExtendedContentBlock = ToolContentBlock | AudioContent | VideoContent;
 
 const DEFAULT_READ_PAGE_MAX_BYTES = 512 * 1024;
 const MAX_ADAPTIVE_READ_MAX_BYTES = 512 * 1024;
@@ -300,115 +311,113 @@ async function executeReadWithAdaptivePaging(params: {
   return withToolResultText(firstResult, finalText);
 }
 
-function rewriteReadImageHeader(text: string, mimeType: string, filePath?: string): string {
-  const trimmedText = text.trim();
-  if (trimmedText.startsWith("Read image file")) {
-    return "";
-  }
-  return text;
-}
-
 async function normalizeReadImageResult(
   result: AgentToolResult<unknown>,
   filePath: string,
 ): Promise<AgentToolResult<unknown>> {
-  
   // Get absolute path
-  const workspaceRoot = '/home/jeffc/.openclaw/workspace/.openclaw-dev/workspace';
+  const workspaceRoot = "/home/jeffc/.openclaw/workspace/.openclaw-dev/workspace";
   let absoluteFilePath = filePath;
-  if (!path.isAbsolute(filePath) && !filePath.startsWith('/')) {
+  if (!path.isAbsolute(filePath) && !filePath.startsWith("/")) {
     absoluteFilePath = path.resolve(workspaceRoot, filePath);
   }
-  
+
   // Get file extension
-  const ext = absoluteFilePath.toLowerCase().split('.').pop() || '';
-  
+  const ext = absoluteFilePath.toLowerCase().split(".").pop() || "";
+
   // Define supported image, audio and video extensions
-  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'tiff', 'ico'];
-  const audioExtensions = ['ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus', 'webm', 'wma'];
-  const videoExtensions = ['mp4', 'webm', 'avi', 'mov', 'mkv', 'm4v', 'mpg', 'mpeg'];
-  
+  const imageExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "tiff", "ico"];
+  const audioExtensions = ["ogg", "mp3", "wav", "flac", "m4a", "aac", "opus", "webm", "wma"];
+  const videoExtensions = ["mp4", "webm", "avi", "mov", "mkv", "m4v", "mpg", "mpeg"];
+
   const isImage = imageExtensions.includes(ext);
   const isAudio = audioExtensions.includes(ext);
   const isVideo = videoExtensions.includes(ext);
-  
+
   // MIME type mapping
   const mimeTypes: Record<string, string> = {
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'bmp': 'image/bmp',
-    'webp': 'image/webp',
-    'svg': 'image/svg+xml',
-    'tiff': 'image/tiff',
-    'ico': 'image/x-icon',
-    'ogg': 'audio/ogg',
-    'mp3': 'audio/mpeg',
-    'wav': 'audio/wav',
-    'flac': 'audio/flac',
-    'm4a': 'audio/mp4',
-    'aac': 'audio/aac',
-    'opus': 'audio/opus',
-    'webm': 'video/webm',
-    'mp4': 'video/mp4',
-    'avi': 'video/x-msvideo',
-    'mov': 'video/quicktime',
-    'mkv': 'video/x-matroska',
-    'm4v': 'video/x-m4v',
-    'mpg': 'video/mpeg',
-    'mpeg': 'video/mpeg',
-    'wma': 'audio/x-ms-wma',
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    bmp: "image/bmp",
+    webp: "image/webp",
+    svg: "image/svg+xml",
+    tiff: "image/tiff",
+    ico: "image/x-icon",
+    ogg: "audio/ogg",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    flac: "audio/flac",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    opus: "audio/opus",
+    webm: "video/webm",
+    mp4: "video/mp4",
+    avi: "video/x-msvideo",
+    mov: "video/quicktime",
+    mkv: "video/x-matroska",
+    m4v: "video/x-m4v",
+    mpg: "video/mpeg",
+    mpeg: "video/mpeg",
+    wma: "audio/x-ms-wma",
   };
-  
-  const mimeType = mimeTypes[ext] || (isImage ? 'image/jpeg' : isAudio ? 'audio/ogg' : isVideo ? 'video/mp4' : '');
-  
+
+  const mimeType =
+    mimeTypes[ext] || (isImage ? "image/jpeg" : isAudio ? "audio/ogg" : isVideo ? "video/mp4" : "");
+
   if (isImage || isAudio || isVideo) {
     const fileName = path.basename(absoluteFilePath);
-    
+
     if (isImage) {
       // Read image file and convert to base64
       const imageBuffer = await fs.readFile(absoluteFilePath);
-      const base64Data = imageBuffer.toString('base64');
-      
+      const base64Data = imageBuffer.toString("base64");
+
       return {
         ...result,
-        content: [{
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: mimeType,
-            data: base64Data
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: mimeType,
+              data: base64Data,
+            },
+            filename: fileName,
+            url: `http://localhost:18791/${filePath}`,
           },
-          filename: fileName,
-          url: `http://localhost:18791/${filePath}`
-        }] as unknown as AgentToolResult<unknown>["content"]
+        ] as unknown as AgentToolResult<unknown>["content"],
       };
     } else if (isAudio) {
       const fileUrl = `http://localhost:18791/${filePath}`;
       return {
         ...result,
-        content: [{
-          type: "audio",
-          url: fileUrl,
-          mimeType: mimeType,
-          filename: fileName
-        }] as unknown as AgentToolResult<unknown>["content"]
+        content: [
+          {
+            type: "audio",
+            url: fileUrl,
+            mimeType: mimeType,
+            filename: fileName,
+          },
+        ] as unknown as AgentToolResult<unknown>["content"],
       };
     } else {
       const fileUrl = `http://localhost:18791/${filePath}`;
       return {
         ...result,
-        content: [{
-          type: "video",
-          url: fileUrl,
-          mimeType: mimeType,
-          filename: fileName
-        }] as unknown as AgentToolResult<unknown>["content"]
+        content: [
+          {
+            type: "video",
+            url: fileUrl,
+            mimeType: mimeType,
+            filename: fileName,
+          },
+        ] as unknown as AgentToolResult<unknown>["content"],
       };
     }
   }
-  
+
   // If we get here, return original result
   return result;
 }
@@ -701,7 +710,7 @@ export function createOpenClawReadTool(
         normalized ??
         (params && typeof params === "object" ? (params as Record<string, unknown>) : undefined);
       assertRequiredParams(record, CLAUDE_PARAM_GROUPS.read, base.name);
-      
+
       const result = await executeReadWithAdaptivePaging({
         base,
         toolCallId,
@@ -709,36 +718,38 @@ export function createOpenClawReadTool(
         signal,
         maxBytes: resolveAdaptiveReadMaxBytes(options),
       });
-      
+
       // Get the original path from params
-      let filePath = typeof (params)?.path === "string" 
-        ? String((params).path) 
-        : (typeof record?.path === "string" ? String(record.path) : "<unknown>");
-      
+      let filePath =
+        typeof params?.path === "string"
+          ? String(params.path)
+          : typeof record?.path === "string"
+            ? String(record.path)
+            : "<unknown>";
+
       // Strip everything up to the LAST 'workspace/' in the path
       // This handles cases where 'workspace' appears multiple times in the absolute path
-      const lastWorkspaceIndex = filePath.lastIndexOf('/workspace/');
+      const lastWorkspaceIndex = filePath.lastIndexOf("/workspace/");
       if (lastWorkspaceIndex !== -1) {
         // Get everything after the last '/workspace/'
-        filePath = filePath.substring(lastWorkspaceIndex + '/workspace/'.length);
-      } else if (filePath.startsWith('workspace/')) {
+        filePath = filePath.substring(lastWorkspaceIndex + "/workspace/".length);
+      } else if (filePath.startsWith("workspace/")) {
         // Handle relative paths that start with workspace/
-        filePath = filePath.substring('workspace/'.length);
+        filePath = filePath.substring("workspace/".length);
       }
-      
+
       const strippedDetailsResult = stripReadTruncationContentDetails(result);
       const normalizedResult = await normalizeReadImageResult(strippedDetailsResult, filePath);
-      
+
       // Check if this is an image/audio/video file - bypass sanitization entirely
-      const isAnyMedia = filePath.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg|tiff|ico|ogg|mp3|wav|flac|m4a|aac|opus|webm|mp4|avi|mov|mkv|m4v|mpg|mpeg|wma)$/i);
-      
+      const isAnyMedia = filePath.match(
+        /\.(jpg|jpeg|png|gif|bmp|webp|svg|tiff|ico|ogg|mp3|wav|flac|m4a|aac|opus|webm|mp4|avi|mov|mkv|m4v|mpg|mpeg|wma)$/i,
+      );
+
       if (isAnyMedia) {
         return normalizedResult;
       }
-      return sanitizeToolResultMedia(
-        normalizedResult,
-        `read:${filePath}`,
-      );
+      return sanitizeToolResultMedia(normalizedResult, `read:${filePath}`);
     },
   };
 }
