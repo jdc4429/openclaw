@@ -710,6 +710,7 @@ export function createOpenClawReadTool(
         normalized ??
         (params && typeof params === "object" ? (params as Record<string, unknown>) : undefined);
       assertRequiredParams(record, CLAUDE_PARAM_GROUPS.read, base.name);
+      
       const result = await executeReadWithAdaptivePaging({
         base,
         toolCallId,
@@ -717,15 +718,23 @@ export function createOpenClawReadTool(
         signal,
         maxBytes: resolveAdaptiveReadMaxBytes(options),
       });
-      // Use the original user input path from params, not the resolved absolute path
-      let filePath = typeof (params)?.path === "string" ? String((params).path) : (typeof record?.path === "string" ? String(record.path) : "<unknown>");
-      // Strip workspace prefix if present - ONLY in dev build
-      if (filePath.includes('workspace')) {
-        const workspaceIndex = filePath.indexOf('workspace/');
-        if (workspaceIndex !== -1) {
-          filePath = filePath.substring(workspaceIndex + 'workspace/'.length);
-        }
+      
+      // Get the original path from params
+      let filePath = typeof (params)?.path === "string" 
+        ? String((params).path) 
+        : (typeof record?.path === "string" ? String(record.path) : "<unknown>");
+      
+      // Strip everything up to the LAST 'workspace/' in the path
+      // This handles cases where 'workspace' appears multiple times in the absolute path
+      const lastWorkspaceIndex = filePath.lastIndexOf('/workspace/');
+      if (lastWorkspaceIndex !== -1) {
+        // Get everything after the last '/workspace/'
+        filePath = filePath.substring(lastWorkspaceIndex + '/workspace/'.length);
+      } else if (filePath.startsWith('workspace/')) {
+        // Handle relative paths that start with workspace/
+        filePath = filePath.substring('workspace/'.length);
       }
+      
       const strippedDetailsResult = stripReadTruncationContentDetails(result);
       const normalizedResult = await normalizeReadImageResult(strippedDetailsResult, filePath);
       
