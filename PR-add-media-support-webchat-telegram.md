@@ -103,7 +103,7 @@ None - all features are additive.
 
 <img width="1555" height="894" alt="Screenshot 2026-04-07 013354" src="https://github.com/user-attachments/assets/63de7368-2b85-4f58-9033-717de68af0bf" />
 
-<img width="1555" height="894" alt="Screenshot 2026-04-07 013354" src="https://github.com/user-attachments/assets/9e4a954d-bcb0-4b8c-972e-0c05b5aa734e" />
+<img width="948" height="908" alt="Screenshot 2026-04-07 013658" src="https://github.com/user-attachments/assets/178e2057-e52a-47aa-9736-8b153137c387" />
 
 ## Example TOOLS.md
 
