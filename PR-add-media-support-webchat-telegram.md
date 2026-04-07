@@ -100,7 +100,7 @@ None - all features are additive.
 .openclaw\workspace\openclaw\src\gateway\chat.ts
 
 
-
+# Some Screenshots
 
 <img width="1250" height="896" alt="embeded-video" src="https://github.com/user-attachments/assets/f0eba12d-4406-41a4-b374-6868e681a898" />
 
