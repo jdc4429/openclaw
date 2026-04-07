@@ -112,7 +112,7 @@ None - all features are additive.
 
 # TOOLS.md - Local Environment Manifest
 
-## 1. Media Server (Local Audio/Video Streaming)
+## 1. Media Server (Local File Audio/Video Streaming)
 
 - **Server URL:** `http://localhost:18791`
 - **Status Check:** If media server not responding, start with:
