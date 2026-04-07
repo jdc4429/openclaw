@@ -86,18 +86,18 @@ None - all features are additive.
 
 #Added & Modified Files:
 
--.openclaw\workspace\openclaw\ui\src\styles\chat\grouped.css
--.openclaw\workspace\openclaw\ui\src\ui\chat\grouped-render.ts
--.openclaw\workspace\openclaw\src\gateway\control-ui-csp.ts
--.openclaw\workspace\openclaw\ui\src\ui\markdown.ts
--.openclaw\workspace\openclaw\src\agents\tools\download-video.ts
--.openclaw\workspace\openclaw\src\agents\pi-tools.ts
--.openclaw\workspace\openclaw\src\agents\pi-tools.read.ts
--.openclaw\workspace\openclaw\src\agents\image-sanitization.ts
--.openclaw\workspace\openclaw\src\agents\tool-media.ts
--.openclaw\workspace\openclaw\src\agents\tool-images.ts
--.openclaw\workspace\.openclaw-dev\src\agents\command\types.ts
--.openclaw\workspace\openclaw\src\gateway\chat.ts
+.openclaw\workspace\openclaw\ui\src\styles\chat\grouped.css<br>
+.openclaw\workspace\openclaw\ui\src\ui\chat\grouped-render.ts<br>
+.openclaw\workspace\openclaw\src\gateway\control-ui-csp.ts<br>
+.openclaw\workspace\openclaw\ui\src\ui\markdown.ts<br>
+.openclaw\workspace\openclaw\src\agents\tools\download-video.ts<br>
+.openclaw\workspace\openclaw\src\agents\pi-tools.ts<br>
+.openclaw\workspace\openclaw\src\agents\pi-tools.read.ts<br>
+.openclaw\workspace\openclaw\src\agents\image-sanitization.ts<br>
+.openclaw\workspace\openclaw\src\agents\tool-media.ts<br>
+.openclaw\workspace\openclaw\src\agents\tool-images.ts<br>
+.openclaw\workspace\.openclaw-dev\src\agents\command\types.ts<br>
+.openclaw\workspace\openclaw\src\gateway\chat.ts
 <br><br><br><br>
 
 ## Some Screenshots
