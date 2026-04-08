@@ -31,44 +31,47 @@ function extractImages(message: unknown): ImageBlock[] {
   const content = m.content;
   const images: ImageBlock[] = [];
 
-  if (Array.isArray(content)) {
-    for (const block of content) {
-      if (typeof block !== "object" || block === null) {
-        continue;
+  if (!Array.isArray(content)) return images;
+
+  for (let i = 0; i < content.length; i++) {
+    const block = content[i];
+    if (typeof block !== "object" || block === null) continue;
+    const b = block as Record<string, unknown>;
+
+    if (b.type === "image") {
+      const source = b.source as Record<string, unknown> | undefined;
+      if (source?.type === "base64" && typeof source.data === "string") {
+        const mediaType = (source.media_type as string) || "image/png";
+        const raw = source.data as string;
+        const url = raw.startsWith("data:") ? raw : `data:${mediaType};base64,${raw}`;
+
+        // Base64 images should NOT have clickable links - they're embedded data
+        // Only set filename if explicitly provided in the image block
+        const filename = typeof b.filename === "string" ? b.filename : undefined;
+        images.push({ url, filename, httpUrl: undefined });
+      } else if (typeof b.url === "string") {
+        // Handle regular image URLs
+        const u = b.url as string;
+        // Only create clickable links for media server URLs, not arbitrary HTTP URLs
+        const isMediaServerUrl = u.startsWith("http://localhost:18791/") || 
+                               u.startsWith("http://127.0.0.1:18791/");
+        const httpUrl = isMediaServerUrl ? u : undefined;
+        const filename = typeof b.filename === "string" ? b.filename : u.split("/").pop();
+        images.push({ url: u, filename, httpUrl });
       }
-      const b = block as Record<string, unknown>;
-
-      if (b.type === "image") {
-        const source = b.source as Record<string, unknown> | undefined;
-        // Get filename from the original filePath that was passed to normalizeReadImageResult
-        // Since b.url is undefined, we need to get the filename from elsewhere
-        // The httpUrl should be constructed from the filePath stored in the message
-        let filename = "image";
-        let httpUrl = undefined;
-
-        // Try to get filename from b.filename or from the media_path
-        if (typeof b.filename === "string") {
-          filename = b.filename;
-          httpUrl = `http://localhost:18791/${filename}`;
-        } else if (b.source && typeof b.source === "object") {
-          // No filename available, use a default
-          filename = "image.jpg";
-        }
-        if (source?.type === "base64" && typeof source.data === "string") {
-          const data = source.data;
-          const mediaType = (source.media_type as string) || "image/png";
-          const url = data.startsWith("data:") ? data : `data:${mediaType};base64,${data}`;
-          images.push({ url, filename, httpUrl });
-        } else if (typeof b.url === "string") {
-          images.push({ url: b.url, filename, httpUrl: b.url });
-        }
-      } else if (b.type === "image_url") {
-        const imageUrl = b.image_url as Record<string, unknown> | undefined;
-        if (typeof imageUrl?.url === "string") {
-          const urlPath = imageUrl.url;
-          const filename = urlPath.split("/").pop() || "image";
-          images.push({ url: imageUrl.url, filename, httpUrl: imageUrl.url });
-        }
+    } else if (b.type === "image_url") {
+      const imageUrl = b.image_url as Record<string, unknown> | undefined;
+      if (typeof imageUrl?.url === "string") {
+        const u = imageUrl.url as string;
+        // Only create clickable links for media server URLs, not arbitrary HTTP URLs
+        const isMediaServerUrl = u.startsWith("http://localhost:18791/") || 
+                               u.startsWith("http://127.0.0.1:18791/");
+        const httpUrl = isMediaServerUrl ? u : undefined;
+        images.push({
+          url: u,
+          filename: u.split("/").pop(),
+          httpUrl,
+        });
       }
     }
   }
@@ -588,6 +591,7 @@ function renderAvatar(
   const normalized = normalizeRoleForGrouping(role);
   const assistantName = assistant?.name?.trim() || "Assistant";
   const assistantAvatar = assistant?.avatar?.trim() || "";
+  
   const initial =
     normalized === "user"
       ? html`
@@ -625,6 +629,7 @@ function renderAvatar(
                 </text>
               </svg>
             `;
+
   const className =
     normalized === "user"
       ? "user"
@@ -635,16 +640,16 @@ function renderAvatar(
           : "other";
 
   if (assistantAvatar && normalized === "assistant") {
-    if (isAvatarUrl(assistantAvatar)) {
-      return html`<img
-        class="chat-avatar ${className}"
-        src="${assistantAvatar}"
-        alt="${assistantName}"
-      />`;
+    // FIX: Convert path to an absolute media server URL
+    let finalSrc = assistantAvatar;
+    if (!assistantAvatar.startsWith("http") && !assistantAvatar.startsWith("data:")) {
+      // Strips leading slashes and forces absolute server URL
+      finalSrc = `http://localhost:18791/${assistantAvatar.replace(/\\/g, "/").replace(/^\/+/, "")}`;
     }
+
     return html`<img
-      class="chat-avatar ${className} chat-avatar--logo"
-      src="${agentLogoUrl(basePath ?? "")}"
+      class="chat-avatar ${className}"
+      src="${finalSrc}"
       alt="${assistantName}"
     />`;
   }
@@ -666,9 +671,7 @@ function isAvatarUrl(value: string): boolean {
 }
 
 function renderMessageImages(images: ImageBlock[]) {
-  if (images.length === 0) {
-    return nothing;
-  }
+  if (images.length === 0) return nothing;
 
   return html`
     <div class="chat-message-images">
@@ -681,17 +684,16 @@ function renderMessageImages(images: ImageBlock[]) {
               class="chat-message-image"
               onload="(e) => { const img = e.target; img.dataset.orientation = img.naturalWidth > img.naturalHeight ? 'landscape' : 'portrait'; }"
             />
-            ${img.filename
+            ${img.httpUrl && img.httpUrl.startsWith("http")
               ? html`<a
-                  href=${img.httpUrl || img.url}
+                  href=${img.httpUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="chat-image-filename"
                   title="Open full-size image"
                   style="display: block; text-align: center; width: 100%;"
-                >
-                  ${img.filename}
-                </a>`
+                  >${img.filename ?? "Open Image"}</a
+                >`
               : nothing}
           </div>
         `,
