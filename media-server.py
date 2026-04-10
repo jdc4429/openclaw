@@ -32,7 +32,22 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
         return path
     
     def get_full_file_path(self, requested_path):
-        return requested_path
+        """Resolve a request path to a safe absolute path under self.directory."""
+        if not requested_path:
+            return None
+
+        # Remove query/fragment if present and force relative path semantics
+        clean_path = requested_path.split('?', 1)[0].split('#', 1)[0]
+        clean_path = clean_path.lstrip('/\\')
+
+        base_dir = os.path.realpath(self.directory)
+        candidate_path = os.path.realpath(os.path.join(base_dir, clean_path))
+
+        # Ensure the resolved path stays inside the configured base directory
+        if os.path.commonpath([base_dir, candidate_path]) != base_dir:
+            return None
+
+        return candidate_path
     
     def do_GET(self):
         """Handle GET requests"""
