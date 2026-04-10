@@ -537,6 +537,10 @@ body {{
         except Exception as e:
             self.send_error(500, f'Error reading file: {str(e)}')
     
+    def sanitize_header_value(self, value):
+        """Sanitize header values to prevent HTTP response splitting."""
+        return str(value).replace('\r', '').replace('\n', '')
+
     def serve_file_with_range(self, path):
         """Serve file with support for range requests (for seeking in audio/video)"""
         # Strip workspace prefix and get the actual file path
@@ -605,7 +609,8 @@ body {{
             mime_type = mime_map.get(ext, 'application/octet-stream')
         
         self.send_response(status_code)
-        self.send_header('Content-Type', mime_type)
+        safe_mime_type = self.sanitize_header_value(mime_type)
+        self.send_header('Content-Type', safe_mime_type)
         self.send_header('Content-Length', str(content_length))
         self.send_header('Accept-Ranges', 'bytes')
         self.send_header('Content-Range', f'bytes {start}-{end}/{file_size}')
