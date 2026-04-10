@@ -135,7 +135,6 @@ python3 /home/openclaw/.openclaw/workspace/media-server.py --port 18791 --max-de
 ## 3. Web Search vs Web Fetch
   
 **web_search** - Use this for finding information, searching the web, looking up current events, finding links. This uses DuckDuckGo/Brave API and is safe.
-  
 **web_fetch** - ONLY use this when the user provides a SPECIFIC URL they want to fetch. Never use web_fetch for general searches.
   
 When a user asks to "search for" something, ALWAYS use web_search, NOT web_fetch.
@@ -146,7 +145,7 @@ When a user asks to "search for" something, ALWAYS use web_search, NOT web_fetch
 - Text files: Returns content directly
 - Image files: Returns base64 data URL for display up to 4K
 - Audio/Video files: Returns streaming URL (no raw data, no size limits)
-- Path resolution: All paths relative to workspace root
+- Path resolution: All paths are absolute
   
 ## 5. Port Assignments
   
@@ -203,12 +202,10 @@ download_video url: "https://www.youtube.com/watch?v=VIDEO_ID" quality: "best"
   
 **URL:** `http://localhost:18791`
   
-**Auto-start:** The media server starts automatically when OpenClaw gateway starts. No manual action needed.
-  
 **If media server is not responding:**
   
 1. Check if running: `ps aux | grep media-server.py`
-2. Start manually: `python3 /home/jeffc/.openclaw/workspace/media-server.py --port 18791 --max-depth 2`
+2. Start manually: `python3 /home/openclaw/.openclaw/workspace/media-server.py --port 18791 --max-depth 2`
   
 **What it serves:**
   
@@ -220,27 +217,20 @@ download_video url: "https://www.youtube.com/watch?v=VIDEO_ID" quality: "best"
   
 ## 9. Ollama Vision Model Usage
   
-**Model:** `qwen3-vl-fix:latest` (local Ollama vision model)
+**Model:** `qwen3-vl:2b` (local Ollama vision model)
   
 **When to use:** When analyzing images with local vision capabilities instead of cloud services
   
 **Direct command syntax:**
   
 ```bash
-ollama run qwen3-vl-fix:latest "Describe this image" -- /path/to/image.jpg
+ollama run qwen3-vl:2b "Describe this image" -- /path/to/image.jpg
 ```
-  
-**Important notes:**
-  
-- The image tool may incorrectly prefix with "anthropic/" instead of "ollama/"
-- Use direct Ollama commands when the image tool fails
-- Model is configured as default image model: `openclaw config get agents.defaults.imageModel`
-- First-time usage may be slower as model loads into memory
   
 **Example workflow:**
   
-1. Find image path: `find /home/jeffc/.openclaw -name "*.jpg"`
-2. Run vision analysis: `ollama run qwen3-vl-fix:latest "Describe what you see" -- /path/to/image.jpg`
+1. Find image path: `find /home/openclaw/.openclaw -name "*.jpg"`
+2. Run vision analysis: `ollama run qwen3-vl:2b "Describe what you see" -- /path/to/image.jpg`
 3. Monitor with process tool if command runs in background
   
 ## 10. Image Upload Handling in Webchat
@@ -256,17 +246,9 @@ ollama run qwen3-vl-fix:latest "Describe this image" -- /path/to/image.jpg
 - Telegram/WhatsApp: Images saved to `~/.openclaw/media/inbound/<uuid>.<ext>`
 - Webchat: Images remain ephemeral base64 - no file path accessible
   
-**Model requirements:**
-  
-- Active primary model must support vision natively
-- If text-only model: images may be silently dropped with no warning
-- OpenClaw skips [Image] summary block for vision-native models
-  
 **Key implications:**
   
 - Webchat uploads cannot be accessed via file path tools
-- Must use model's native vision capabilities
-- Check model vision support before expecting image analysis
 
 ---
 
