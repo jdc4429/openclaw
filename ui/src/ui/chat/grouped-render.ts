@@ -4,6 +4,8 @@ import { getSafeLocalStorage } from "../../local-storage.ts";
 import type { AssistantIdentity } from "../assistant-identity.ts";
 import { icons } from "../icons.ts";
 import { toSanitizedMarkdownHtml } from "../markdown.ts";
+import { openExternalUrlSafe } from "../open-external-url.ts";
+import { normalizeLowercaseStringOrEmpty } from "../string-coerce.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import type { MessageGroup, ToolCard } from "../types/chat-types.ts";
 import { agentLogoUrl } from "../views/agents-utils.ts";
@@ -24,7 +26,48 @@ type ImageBlock = {
   httpUrl?: string;
 };
 
-type MediaType = "image" | "audio" | "video" | null;
+type AudioBlock = {
+  type: "audio";
+  data: string;
+  mimeType: string;
+  filename?: string;
+};
+
+type VideoBlock = {
+  type: "video";
+  data: string;
+  mimeType: string;
+  filename?: string;
+};
+
+const DETAILS_STATE_KEY = "chat:details_state";
+
+function saveDetailsState(id: string, isOpen: boolean) {
+  try {
+    const storage = getSafeLocalStorage();
+    if (!storage) return;
+    const state = JSON.parse(storage.getItem(DETAILS_STATE_KEY) || "{}");
+    state[id] = isOpen;
+    storage.setItem(DETAILS_STATE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+function getDetailsState(id: string): boolean {
+  try {
+    const storage = getSafeLocalStorage();
+    if (!storage) return false;
+    const state = JSON.parse(storage.getItem(DETAILS_STATE_KEY) || "{}");
+    return state[id] === true;
+  } catch {
+    return false;
+  }
+}
+
+function generateDetailsId(message: unknown, index: number): string {
+  const m = message as Record<string, unknown>;
+  const id = m.id || m.messageId || m.timestamp;
+  return `tool-${id}-${index}`;
+}
 
 function extractImages(message: unknown): ImageBlock[] {
   const m = message as Record<string, unknown>;
@@ -44,15 +87,10 @@ function extractImages(message: unknown): ImageBlock[] {
         const mediaType = (source.media_type as string) || "image/png";
         const raw = source.data as string;
         const url = raw.startsWith("data:") ? raw : `data:${mediaType};base64,${raw}`;
-
-        // Base64 images should NOT have clickable links - they're embedded data
-        // Only set filename if explicitly provided in the image block
         const filename = typeof b.filename === "string" ? b.filename : undefined;
         images.push({ url, filename, httpUrl: undefined });
       } else if (typeof b.url === "string") {
-        // Handle regular image URLs
         const u = b.url as string;
-        // Only create clickable links for media server URLs, not arbitrary HTTP URLs
         const isMediaServerUrl = u.startsWith("http://localhost:18791/") || 
                                u.startsWith("http://127.0.0.1:18791/");
         const httpUrl = isMediaServerUrl ? u : undefined;
@@ -63,7 +101,6 @@ function extractImages(message: unknown): ImageBlock[] {
       const imageUrl = b.image_url as Record<string, unknown> | undefined;
       if (typeof imageUrl?.url === "string") {
         const u = imageUrl.url as string;
-        // Only create clickable links for media server URLs, not arbitrary HTTP URLs
         const isMediaServerUrl = u.startsWith("http://localhost:18791/") || 
                                u.startsWith("http://127.0.0.1:18791/");
         const httpUrl = isMediaServerUrl ? u : undefined;
@@ -78,20 +115,6 @@ function extractImages(message: unknown): ImageBlock[] {
 
   return images;
 }
-
-type AudioBlock = {
-  type: "audio";
-  data: string;
-  mimeType: string;
-  filename?: string;
-};
-
-type VideoBlock = {
-  type: "video";
-  data: string;
-  mimeType: string;
-  filename?: string;
-};
 
 function extractAudioVideoBlocks(message: unknown): { audio: AudioBlock[]; video: VideoBlock[] } {
   const m = message as Record<string, unknown>;
@@ -156,35 +179,6 @@ function extractAudioVideoBlocks(message: unknown): { audio: AudioBlock[]; video
   }
 
   return { audio, video };
-}
-
-function detectMediaInMessage(message: unknown): MediaType {
-  const m = message as Record<string, unknown>;
-  const content = m.content;
-
-  if (Array.isArray(content)) {
-    for (const block of content) {
-      if (typeof block !== "object" || block === null) {
-        continue;
-      }
-      const b = block as Record<string, unknown>;
-
-      if (b.type === "image" || b.type === "image_url") {
-        return "image";
-      }
-      if (b.type === "audio" || b.type === "input_audio") {
-        return "audio";
-      }
-      if (b.type === "video" || b.type === "video_url") {
-        return "video";
-      }
-    }
-  }
-  return null;
-}
-
-function hasMediaContent(message: unknown): boolean {
-  return detectMediaInMessage(message) !== null;
 }
 
 export function renderReadingIndicatorGroup(assistant?: AssistantIdentity, basePath?: string) {
@@ -640,10 +634,8 @@ function renderAvatar(
           : "other";
 
   if (assistantAvatar && normalized === "assistant") {
-    // FIX: Convert path to an absolute media server URL
     let finalSrc = assistantAvatar;
     if (!assistantAvatar.startsWith("http") && !assistantAvatar.startsWith("data:")) {
-      // Strips leading slashes and forces absolute server URL
       finalSrc = `http://localhost:18791/${assistantAvatar.replace(/\\/g, "/").replace(/^\/+/, "")}`;
     }
 
@@ -666,10 +658,6 @@ function renderAvatar(
   return html`<div class="chat-avatar ${className}">${initial}</div>`;
 }
 
-function isAvatarUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value) || /^data:image\//i.test(value) || value.startsWith("/");
-}
-
 function renderMessageImages(images: ImageBlock[]) {
   if (images.length === 0) return nothing;
 
@@ -682,7 +670,6 @@ function renderMessageImages(images: ImageBlock[]) {
               src=${img.url}
               alt=${img.alt ?? "Attached image"}
               class="chat-message-image"
-              onload="(e) => { const img = e.target; img.dataset.orientation = img.naturalWidth > img.naturalHeight ? 'landscape' : 'portrait'; }"
             />
             ${img.httpUrl && img.httpUrl.startsWith("http")
               ? html`<a
@@ -721,11 +708,11 @@ function renderMessageMedia(audioBlocks: AudioBlock[], videoBlocks: VideoBlock[]
   for (let i = 0; i < videoBlocks.length; i++) {
     const video = videoBlocks[i];
     elements.push(html`
-      <div class="chat-media-wrapper" style="width: 100%; min-width: 480px; max-width: 854px;">
+      <div class="chat-media-wrapper" style="width: 100%; min-width: 360px; max-width: 640px;">
         <video
           controls
           class="chat-message-video"
-          style="width: 100%; min-width: 480px; max-width: 854px; height: auto; max-height: 480px;"
+          style="width: 100%; min-width: 360px; max-width: 640px; height: auto; max-height: 360px;"
           playsinline
         >
           <source src=${video.data} type=${video.mimeType} />
@@ -744,7 +731,6 @@ function renderMessageMedia(audioBlocks: AudioBlock[], videoBlocks: VideoBlock[]
 }
 
 function renderVideoEmbed(markdown: string) {
-  // Convert YouTube watch URL to embed URL
   const watchMatch = markdown.match(/https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/);
   if (watchMatch) {
     const embedUrl = `https://www.youtube.com/embed/${watchMatch[1]}`;
@@ -762,7 +748,6 @@ function renderVideoEmbed(markdown: string) {
     `;
   }
 
-  // Look for YouTube embed URLs
   const youtubeMatch = markdown.match(
     /https?:\/\/(?:www\.)?(?:youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]+)/,
   );
@@ -782,7 +767,6 @@ function renderVideoEmbed(markdown: string) {
     `;
   }
 
-  // Look for Vimeo embed URLs
   const vimeoMatch = markdown.match(/https?:\/\/(?:www\.)?player\.vimeo\.com\/video\/(\d+)/);
   if (vimeoMatch) {
     const embedUrl = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
@@ -887,10 +871,11 @@ function renderGroupedMessage(
   const m = message as Record<string, unknown>;
   const role = typeof m.role === "string" ? m.role : "unknown";
   const normalizedRole = normalizeRoleForGrouping(role);
+  const normalizedRawRole = normalizeLowercaseStringOrEmpty(role);
   const isToolResult =
     isToolResultMessage(message) ||
-    role.toLowerCase() === "toolresult" ||
-    role.toLowerCase() === "tool_result" ||
+    normalizedRawRole === "toolresult" ||
+    normalizedRawRole === "tool_result" ||
     typeof m.toolCallId === "string" ||
     typeof m.tool_call_id === "string";
 
@@ -934,8 +919,9 @@ function renderGroupedMessage(
     markdown && !toolSummaryLabel ? markdown.trim().replace(/\s+/g, " ").slice(0, 120) : "";
 
   const hasActions = canCopyMarkdown || canExpand;
-  const messageHasMedia =
-    hasMediaContent(message) || audioBlocks.length > 0 || videoBlocks.length > 0;
+  const detailsId = generateDetailsId(message, 0);
+  const isOpen = getDetailsState(detailsId);
+  
   return html`
     <div class="${bubbleClasses}">
       ${hasActions
@@ -946,7 +932,14 @@ function renderGroupedMessage(
         : nothing}
       ${isToolMessage
         ? html`
-            <details class="chat-tool-msg-collapse" ?open=${messageHasMedia}>
+            <details 
+              class="chat-tool-msg-collapse" 
+              ?open=${isOpen}
+              @toggle=${(e: Event) => {
+                const details = e.currentTarget as HTMLDetailsElement;
+                saveDetailsState(detailsId, details.open);
+              }}
+            >
               <summary class="chat-tool-msg-summary">
                 <span class="chat-tool-msg-summary__icon">${icons.zap}</span>
                 <span class="chat-tool-msg-summary__label">Tool output</span>
