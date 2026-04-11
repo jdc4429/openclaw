@@ -975,6 +975,11 @@ const styleString = storedSize?.width
               @toggle=${(e: Event) => {
                 const details = e.currentTarget as HTMLDetailsElement;
                 saveDetailsState(detailsId, details.open);
+                if (details.open) {
+                  setTimeout(() => {
+                    details.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  }, 50);
+                }
               }}
 >
               <summary class="chat-tool-msg-summary">
