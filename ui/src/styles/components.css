@@ -4594,3 +4594,28 @@ details[open] > .ov-expandable-toggle::after {
 .chat-bubble-resizable .chat-resize-handle:hover {
   background: linear-gradient(135deg, transparent 50%, #3b82f6 50%) !important;
 }
+
+.chat-group.assistant .chat-bubble:has(.chat-bubble-actions),
+.chat-group.tool .chat-bubble:has(.chat-bubble-actions) {
+  padding-top: 32px;
+}
+
+/* Remove all bottom padding from tool messages */
+.chat-bubble:has(.chat-tool-msg-collapse) {
+  padding-bottom: 0 !important;
+}
+
+.chat-tool-msg-collapse {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.chat-tool-msg-body {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.chat-tool-msg-body > :last-child {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}

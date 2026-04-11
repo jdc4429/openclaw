@@ -58,11 +58,12 @@ function saveDetailsState(id: string, isOpen: boolean) {
 function getDetailsState(id: string): boolean {
   try {
     const storage = getSafeLocalStorage();
-    if (!storage) return false;
+    if (!storage) return true;
     const state = JSON.parse(storage.getItem(DETAILS_STATE_KEY) || "{}");
+    if (state[id] === undefined) return true;
     return state[id] === true;
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -673,6 +674,16 @@ function renderMessageImages(images: ImageBlock[]) {
               src=${img.url}
               alt=${img.alt ?? "Attached image"}
               class="chat-message-image"
+              @load=${(e: Event) => {
+                const imgEl = e.target as HTMLImageElement;
+                if (imgEl.naturalWidth > 100) {
+                  const bubble = imgEl.closest('.chat-bubble') as HTMLElement;
+                  if (bubble && !bubble.style.width) {
+                    const sixtyPercent = Math.floor(imgEl.naturalWidth * 0.6);
+                    bubble.style.width = `${sixtyPercent}px`;
+                  }
+                }
+              }}
             />
             ${img.httpUrl && img.httpUrl.startsWith("http")
               ? html`<a
@@ -959,13 +970,13 @@ const styleString = storedSize?.width
       ${isToolMessage
         ? html`
             <details 
-              class="chat-tool-msg-collapse" 
+              class="chat-tool-msg-collapse"
               ?open=${isOpen}
               @toggle=${(e: Event) => {
                 const details = e.currentTarget as HTMLDetailsElement;
                 saveDetailsState(detailsId, details.open);
               }}
-            >
+>
               <summary class="chat-tool-msg-summary">
                 <span class="chat-tool-msg-summary__icon">${icons.zap}</span>
                 <span class="chat-tool-msg-summary__label">Tool output</span>
