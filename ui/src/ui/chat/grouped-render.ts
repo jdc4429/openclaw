@@ -1,5 +1,7 @@
 import { html, nothing } from "lit";
+import { ref } from "lit/directives/ref.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
+import { ifDefined } from "lit/directives/if-defined.js";
 import { getSafeLocalStorage } from "../../local-storage.ts";
 import type { AssistantIdentity } from "../assistant-identity.ts";
 import { icons } from "../icons.ts";
@@ -9,6 +11,7 @@ import { normalizeLowercaseStringOrEmpty } from "../string-coerce.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import type { MessageGroup, ToolCard } from "../types/chat-types.ts";
 import { agentLogoUrl } from "../views/agents-utils.ts";
+import { setupResizeHandles, getStoredMessageSize, ResizeDirection } from "./message-resize.ts";
 import { renderCopyAsMarkdownButton } from "./copy-as-markdown.ts";
 import {
   extractTextCached,
@@ -636,7 +639,7 @@ function renderAvatar(
   if (assistantAvatar && normalized === "assistant") {
     let finalSrc = assistantAvatar;
     if (!assistantAvatar.startsWith("http") && !assistantAvatar.startsWith("data:")) {
-      finalSrc = `http://localhost:18791/${assistantAvatar.replace(/\\/g, "/").replace(/^\/+/, "")}`;
+      finalSrc = `/avatar/${assistantAvatar.replace(/\\/g, "/").replace(/^\/+/, "")}`;
     }
 
     return html`<img
@@ -708,11 +711,11 @@ function renderMessageMedia(audioBlocks: AudioBlock[], videoBlocks: VideoBlock[]
   for (let i = 0; i < videoBlocks.length; i++) {
     const video = videoBlocks[i];
     elements.push(html`
-      <div class="chat-media-wrapper" style="width: 100%; min-width: 360px; max-width: 640px;">
+      <div class="chat-media-wrapper" style="width: 100%; max-width: 640px;">
         <video
           controls
           class="chat-message-video"
-          style="width: 100%; min-width: 360px; max-width: 640px; height: auto; max-height: 360px;"
+          style="width: 100%; max-width: 640px; height: auto; max-height: 360px;"
           playsinline
         >
           <source src=${video.data} type=${video.mimeType} />
@@ -896,9 +899,16 @@ function renderGroupedMessage(
 
   const jsonResult = markdown && !opts.isStreaming ? detectJson(markdown) : null;
 
-  const bubbleClasses = ["chat-bubble", opts.isStreaming ? "streaming" : "", "fade-in"]
-    .filter(Boolean)
-    .join(" ");
+  const isResizable = (role === "assistant" || role === "tool" || isToolResult) && !opts.isStreaming;
+  const messageId = (m.id || m.messageId || Date.now().toString()) as string;
+  const storedSize = isResizable ? getStoredMessageSize(messageId) : null;
+
+  const bubbleClasses = [
+    "chat-bubble", 
+    opts.isStreaming ? "streaming" : "", 
+    "fade-in",
+    isResizable ? "chat-bubble-resizable" : ""
+  ].filter(Boolean).join(" ");
 
   if (!markdown && hasToolCards && isToolResult && !hasMedia) {
     return renderCollapsedToolCards(toolCards, onOpenSidebar);
@@ -922,8 +932,26 @@ function renderGroupedMessage(
   const detailsId = generateDetailsId(message, 0);
   const isOpen = getDetailsState(detailsId);
   
+  const styleString = storedSize?.width && storedSize?.height
+    ? `width: ${storedSize.width}px; height: ${storedSize.height}px;`
+    : '';
+  
+  // Create ref callback
+  const resizeRef = (el: HTMLElement | undefined) => {
+    if (!isResizable || !el) return;
+    if (el.hasAttribute('data-resize-initialized')) return;
+    el.setAttribute('data-resize-initialized', 'true');
+    setTimeout(() => {
+      setupResizeHandles(el, 'bottom-right', messageId);
+    }, 100);
+  };
+  
   return html`
-    <div class="${bubbleClasses}">
+    <div 
+      class="${bubbleClasses}"
+      style="${styleString}"
+      ${ref(resizeRef)}
+    >
       ${hasActions
         ? html`<div class="chat-bubble-actions">
             ${canExpand ? renderExpandButton(markdown!, onOpenSidebar!) : nothing}
