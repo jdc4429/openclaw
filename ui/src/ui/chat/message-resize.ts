@@ -62,25 +62,8 @@ handleRight.style.transition = 'opacity 0.2s';
 handleRight.style.pointerEvents = 'auto';
 handleRight.style.border = '1px solid white';
 
-const handleLeft = document.createElement('div');
-handleLeft.className = 'chat-resize-handle chat-resize-handle--bottom-left';
-handleLeft.setAttribute('aria-label', 'Resize from bottom left');
-handleLeft.style.position = 'absolute';
-handleLeft.style.bottom = '-8px';
-handleLeft.style.left = '-8px';
-handleLeft.style.width = '16px';
-handleLeft.style.height = '16px';
-handleLeft.style.cursor = 'sw-resize';
-handleLeft.style.backgroundColor = '#3b82f6';
-handleLeft.style.zIndex = '9999';
-handleLeft.style.borderRadius = '2px';
-handleLeft.style.opacity = '0';
-handleLeft.style.transition = 'opacity 0.2s';
-handleLeft.style.pointerEvents = 'auto';
-handleLeft.style.border = '1px solid white';
-  
+ 
   container.appendChild(handleRight);
-  container.appendChild(handleLeft);
 
   let isResizing = false;
   let startX = 0, startY = 0;
@@ -90,14 +73,12 @@ handleLeft.style.border = '1px solid white';
   const showHandles = () => {
     if (!isResizing) {
       handleRight.style.opacity = '0.8';
-      handleLeft.style.opacity = '0.8';
     }
   };
   
   const hideHandles = () => {
     if (!isResizing) {
       handleRight.style.opacity = '0';
-      handleLeft.style.opacity = '0';
     }
   };
   
@@ -118,20 +99,6 @@ handleLeft.style.border = '1px solid white';
     }
   });
   
-  handleLeft.addEventListener('mouseenter', () => {
-    handleLeft.style.opacity = '1';
-    handleLeft.style.backgroundColor = '#2563eb';
-  });
-  
-  handleLeft.addEventListener('mouseleave', () => {
-    if (!isResizing && container.matches(':hover')) {
-      handleLeft.style.opacity = '0.8';
-      handleLeft.style.backgroundColor = '#3b82f6';
-    } else if (!isResizing) {
-      handleLeft.style.opacity = '0';
-    }
-  });
-
   function onMouseMove(e: MouseEvent) {
     if (!isResizing || !currentHandle) return;
     e.preventDefault();
@@ -183,10 +150,8 @@ function onMouseUp() {
   
   if (!container.matches(':hover')) {
     handleRight.style.opacity = '0';
-    handleLeft.style.opacity = '0';
   } else {
     handleRight.style.opacity = '0.8';
-    handleLeft.style.opacity = '0.8';
   }
 }
 
@@ -206,12 +171,10 @@ function onMouseUp() {
   }
 
   handleRight.addEventListener('mousedown', (e) => startResize(e, handleRight));
-  handleLeft.addEventListener('mousedown', (e) => startResize(e, handleLeft));
 
   return { 
     cleanup: () => {
       handleRight.remove();
-      handleLeft.remove();
       container.removeEventListener('mouseenter', showHandles);
       container.removeEventListener('mouseleave', hideHandles);
     } 
