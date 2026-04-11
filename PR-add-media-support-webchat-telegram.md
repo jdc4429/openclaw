@@ -110,6 +110,10 @@ None - all features are additive.
 <img width="1250" height="894" alt="Screenshot 2026-04-07 013354" src="https://github.com/user-attachments/assets/63de7368-2b85-4f58-9033-717de68af0bf" />
   
 <img width="1408" height="950" alt="Screenshot 2026-04-07 094253" src="https://github.com/user-attachments/assets/84af6222-9d08-44fb-8d60-3dfd8ef8a528" />
+
+https://github.com/user-attachments/assets/a11f41b2-0262-48c7-8ba2-7c5462840d6f
+
+
   
 ## Example TOOLS.md
   
