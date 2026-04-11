@@ -24,11 +24,15 @@ export function getStoredMessageSize(messageId: string): ResizeState | null {
 export function storeMessageSize(messageId: string, size: ResizeState) {
   try {
     const storage = getSafeLocalStorage();
-    if (!storage) return;
+    if (!storage) {
+      return;
+    }
     const sizes = JSON.parse(storage.getItem(RESIZE_STORAGE_KEY) || '{}');
     sizes[messageId] = size;
     storage.setItem(RESIZE_STORAGE_KEY, JSON.stringify(sizes));
-  } catch {}
+  } catch (e) {
+    console.error('Failed to store size:', e); // Add this
+  }
 }
 
 export function setupResizeHandles(
@@ -138,14 +142,14 @@ function onMouseUp() {
   document.body.style.cursor = '';
   
   if (container.style.width) {
-    // After resize, let height adjust to content
     const newWidth = parseInt(container.style.width);
     container.style.height = 'auto';
-    
     storeMessageSize(messageId, {
       width: newWidth,
-      height: null  // Don't store height, let it be auto
+      height: null
     });
+  } else {
+    console.log('No container.style.width found'); // Add this
   }
   
   if (!container.matches(':hover')) {

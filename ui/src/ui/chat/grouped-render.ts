@@ -900,9 +900,8 @@ function renderGroupedMessage(
   const jsonResult = markdown && !opts.isStreaming ? detectJson(markdown) : null;
 
   const isResizable = (role === "assistant" || role === "tool" || isToolResult) && !opts.isStreaming;
-  const messageId = (m.id || m.messageId || Date.now().toString()) as string;
+  const messageId = (m.id || m.messageId || m.timestamp?.toString() || Date.now().toString()) as string;
   const storedSize = isResizable ? getStoredMessageSize(messageId) : null;
-
   const bubbleClasses = [
     "chat-bubble", 
     opts.isStreaming ? "streaming" : "", 
@@ -932,10 +931,9 @@ function renderGroupedMessage(
   const detailsId = generateDetailsId(message, 0);
   const isOpen = getDetailsState(detailsId);
   
-  const styleString = storedSize?.width && storedSize?.height
-    ? `width: ${storedSize.width}px; height: ${storedSize.height}px;`
-    : '';
-  
+const styleString = storedSize?.width
+  ? `width: ${storedSize.width}px;`
+  : '';
   // Create ref callback
   const resizeRef = (el: HTMLElement | undefined) => {
     if (!isResizable || !el) return;
