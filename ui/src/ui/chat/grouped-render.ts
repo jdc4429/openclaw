@@ -589,7 +589,6 @@ function renderAvatar(
   const normalized = normalizeRoleForGrouping(role);
   const assistantName = assistant?.name?.trim() || "Assistant";
   const assistantAvatar = assistant?.avatar?.trim() || "";
-  
   const initial =
     normalized === "user"
       ? html`
@@ -627,7 +626,6 @@ function renderAvatar(
                 </text>
               </svg>
             `;
-
   const className =
     normalized === "user"
       ? "user"
@@ -638,18 +636,21 @@ function renderAvatar(
           : "other";
 
   if (assistantAvatar && normalized === "assistant") {
-    let finalSrc = assistantAvatar;
-    if (!assistantAvatar.startsWith("http") && !assistantAvatar.startsWith("data:")) {
-      finalSrc = `/avatar/${assistantAvatar.replace(/\\/g, "/").replace(/^\/+/, "")}`;
+    if (isAvatarUrl(assistantAvatar)) {
+      return html`<img
+        class="chat-avatar ${className}"
+        src="${assistantAvatar}"
+        alt="${assistantName}"
+      />`;
     }
-
     return html`<img
-      class="chat-avatar ${className}"
-      src="${finalSrc}"
+      class="chat-avatar ${className} chat-avatar--logo"
+      src="${agentLogoUrl(basePath ?? "")}"
       alt="${assistantName}"
     />`;
   }
 
+  /* Assistant with no custom avatar: use logo when basePath available */
   if (normalized === "assistant" && basePath) {
     const logoUrl = agentLogoUrl(basePath);
     return html`<img
@@ -660,6 +661,12 @@ function renderAvatar(
   }
 
   return html`<div class="chat-avatar ${className}">${initial}</div>`;
+}
+
+function isAvatarUrl(value: string): boolean {
+  return (
+    /^https?:\/\//i.test(value) || /^data:image\//i.test(value) || value.startsWith("/") // Relative paths from avatar endpoint
+  );
 }
 
 function renderMessageImages(images: ImageBlock[]) {
@@ -676,12 +683,29 @@ function renderMessageImages(images: ImageBlock[]) {
               class="chat-message-image"
               @load=${(e: Event) => {
                 const imgEl = e.target as HTMLImageElement;
-                if (imgEl.naturalWidth > 100) {
-                  const bubble = imgEl.closest('.chat-bubble') as HTMLElement;
-                  if (bubble && !bubble.style.width) {
-                    const sixtyPercent = Math.floor(imgEl.naturalWidth * 0.6);
-                    bubble.style.width = `${sixtyPercent}px`;
+                const naturalWidth = imgEl.naturalWidth;
+                
+                const bubble = imgEl.closest('.chat-bubble') as HTMLElement;
+                if (bubble && !bubble.style.width) {
+                  let targetWidth: number;
+                  
+                  if (naturalWidth >= 3840) {
+                    targetWidth = 400;
+                  } else if (naturalWidth >= 2560) {
+                    targetWidth = 380;
+                  } else if (naturalWidth >= 1920) {
+                    targetWidth = 360;
+                  } else if (naturalWidth >= 1280) {
+                    targetWidth = 340;
+                  } else if (naturalWidth >= 800) {
+                    targetWidth = 320;
+                  } else if (naturalWidth >= 500) {
+                    targetWidth = 300;
+                  } else {
+                    targetWidth = Math.floor(naturalWidth * 0.8);
                   }
+                  
+                  bubble.style.width = `${targetWidth}px`;
                 }
               }}
             />

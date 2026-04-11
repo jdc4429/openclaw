@@ -192,7 +192,7 @@ img.chat-avatar {
   border: 1px solid var(--border);
   background: var(--card);
   border-radius: var(--radius-lg);
-  padding: 10px 14px;
+  padding: 0px 14px 0px 14px;
   box-shadow: none;
   transition:
     background var(--duration-fast) ease-out,
@@ -520,4 +520,13 @@ img.chat-avatar {
   border-radius: 8px;
   border: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+summary {
+  margin: 0;
+  padding: 4px 8px;
+}
+
+summary::-webkit-details-marker {
+  display: none;
 }

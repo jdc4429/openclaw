@@ -4466,7 +4466,7 @@ details[open] > .ov-expandable-toggle::after {
 .chat-bubble-resizable {
   position: relative;
   min-width: 200px;
-  min-height: 100px;
+  min-height: auto;
   max-width: 90vw;
   transition: none;
   overflow: auto;
@@ -4595,25 +4595,23 @@ details[open] > .ov-expandable-toggle::after {
   background: linear-gradient(135deg, transparent 50%, #3b82f6 50%) !important;
 }
 
-.chat-tool-msg-collapse {
-  padding-bottom: 0 !important;
-  margin-bottom: 0 !important;
+.chat-tools-summary {
+  padding: 2px 6px !important;
+  line-height: 1.2 !important;
+  min-height: 24px !important;
 }
 
-.chat-tool-msg-body {
-  padding-bottom: 0 !important;
-  margin-bottom: 0 !important;
+.chat-tools-summary__icon svg {
+  width: 12px !important;
+  height: 12px !important;
 }
 
-.chat-tool-msg-body > :last-child {
-  margin-bottom: 0 !important;
-  padding-bottom: 0 !important;
+.chat-tools-summary__count {
+  font-size: 11px !important;
 }
 
-.chat-group.assistant .chat-bubble:has(.chat-bubble-actions) {
-  padding-top: 32px;
-}
-
-.chat-bubble:has(.chat-tool-msg-collapse) {
-  padding: 0;
+.chat-bubble:has(.chat-tools-collapse:not([open])) {
+  padding: 0 !important;
+  border: 1px solid var(--border) !important;
+  background: var(--card) !important;
 }
