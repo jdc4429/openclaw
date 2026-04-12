@@ -86,8 +86,6 @@ Also added resize handles on webchat messages so you can resize media!
 None - all features are additive.
 
 ## Modifications to add image, audio, and video to webchat.
-
-#Added & Modified Files:
   
 .openclaw\workspace\openclaw\src\agents\tool-media.ts - NEW FILE  
 .openclaw\workspace\openclaw\src\agents\pi-tools.read.ts  
