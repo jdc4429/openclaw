@@ -24,29 +24,15 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
         self.directory = os.getcwd()
         super().__init__(*args, **kwargs)
     
+    def strip_to_last_workspace(self, path):
+        """Remove everything up to and including the last '/workspace/' in the path"""
+        match = re.search(r'/workspace/(.*)$', path)
+        if match:
+            return match.group(1)
+        return path
+    
     def get_full_file_path(self, requested_path):
-        """Resolve a request path to a safe absolute path under self.directory."""
-        if not requested_path:
-            return None
-
-        # Remove query/fragment if present
-        clean_path = requested_path.split('?', 1)[0].split('#', 1)[0]
-        
-        # Handle URL encoded paths
-        clean_path = unquote(clean_path)
-        
-        # Remove leading slashes but keep relative path
-        clean_path = clean_path.lstrip('/')
-        
-        # Join with base directory
-        base_dir = os.path.realpath(self.directory)
-        candidate_path = os.path.realpath(os.path.join(base_dir, clean_path))
-
-        # Ensure the resolved path stays inside the configured base directory
-        if os.path.commonpath([base_dir, candidate_path]) != base_dir:
-            return None
-
-        return candidate_path
+        return requested_path
     
     def do_GET(self):
         """Handle GET requests"""
@@ -125,7 +111,7 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
                         mime_type = mime_map.get(ext, f'{media_type}/x-unknown')
                     
                     media_files.append({
-                        'path': rel_path_file,  # Use relative path directly
+                        'path': self.strip_to_last_workspace(rel_path_file),
                         'full_path': abs_path,
                         'filename': file,
                         'mimeType': mime_type,
@@ -161,9 +147,6 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
                 dir_path = "."
             filename = media['filename']
             
-            # Use the relative path for the open button
-            open_path = media['path']
-            
             file_list_html += f'''
 <tr>
     <td>
@@ -173,8 +156,8 @@ class MediaServerHandler(SimpleHTTPRequestHandler):
         </div>
     </td>
     <td>
-        <button class="action-btn" onclick="window.open('/{open_path}', '_blank')">▶ Open</button>
-        <button class="action-btn" onclick="copyToClipboard('{open_path}')">📋 Copy Path</button>
+        <button class="action-btn" onclick="window.open('{media['full_path']}', '_blank')">▶ Open</button>
+        <button class="action-btn" onclick="copyToClipboard('{media['full_path']}')">📋 Copy Path</button>
     </td>
     <td><span class="badge badge-{media['type']}">{media['type']}</span></td>
     <td>{media['mimeType']}</td>
@@ -480,7 +463,7 @@ body {{
             self.send_error(400, 'Missing path parameter')
             return
         
-        # Get the actual file path
+        # Strip workspace prefix and get the actual file path
         safe_path = self.get_full_file_path(media_path)
         if not safe_path:
             self.send_error(403, 'Access denied')
@@ -539,13 +522,9 @@ body {{
         except Exception as e:
             self.send_error(500, f'Error reading file: {str(e)}')
     
-    def sanitize_header_value(self, value):
-        """Sanitize header values to prevent HTTP response splitting."""
-        return str(value).replace('\r', '').replace('\n', '')
-
     def serve_file_with_range(self, path):
         """Serve file with support for range requests (for seeking in audio/video)"""
-        # Get the actual file path
+        # Strip workspace prefix and get the actual file path
         safe_path = self.get_full_file_path(path)
         
         if not safe_path:
@@ -611,12 +590,10 @@ body {{
             mime_type = mime_map.get(ext, 'application/octet-stream')
         
         self.send_response(status_code)
-        safe_mime_type = self.sanitize_header_value(mime_type)
-        self.send_header('Content-Type', safe_mime_type)
+        self.send_header('Content-Type', mime_type)
         self.send_header('Content-Length', str(content_length))
         self.send_header('Accept-Ranges', 'bytes')
-        if status_code == 206:
-            self.send_header('Content-Range', f'bytes {start}-{end}/{file_size}')
+        self.send_header('Content-Range', f'bytes {start}-{end}/{file_size}')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Cache-Control', 'no-cache')
         self.end_headers()
