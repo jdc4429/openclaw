@@ -676,6 +676,24 @@ export const TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
         },
       },
     },
+    download_video: {
+      emoji: "📥",
+      title: "Download Video",
+      actions: {
+        download: {
+          label: "download",
+          detailKeys: ["url", "filename", "format", "quality"],
+        },
+        status: {
+          label: "status",
+          detailKeys: ["jobId"],
+        },
+        cancel: {
+          label: "cancel",
+          detailKeys: ["jobId"],
+        },
+      },
+    },
     pdf: {
       emoji: "📑",
       title: "PDF",

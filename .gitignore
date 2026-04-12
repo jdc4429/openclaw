@@ -145,8 +145,25 @@ changelog/fragments/
 
 # Local scratch workspace
 .tmp/
-.artifacts/
-test/fixtures/openclaw-vitest-unit-report.json
-analysis/
-.artifacts/qa-e2e/
-extensions/qa-lab/web/dist/
+run
+restart
+build
+update
+check
+stop
+start
+clean
+install
+openclaw.json
+/agents/
+/canvas/
+/devices/
+/identity/
+/logs/
+/tasks/
+/telegram/
+/workspace/
+update-check.json
+/cluttered/
+/flows/
+openclaw.deepseek-3.1

@@ -1,4 +1,4 @@
-type VectorWriteDb = {
+export type VectorWriteDb = {
   prepare: (sql: string) => {
     run: (...params: unknown[]) => void;
   };

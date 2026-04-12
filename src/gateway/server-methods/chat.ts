@@ -108,7 +108,7 @@ type ChatAbortRequester = {
 };
 
 export const DEFAULT_CHAT_HISTORY_TEXT_MAX_CHARS = 12_000;
-const CHAT_HISTORY_MAX_SINGLE_MESSAGE_BYTES = 128 * 1024;
+const CHAT_HISTORY_MAX_SINGLE_MESSAGE_BYTES = 5 * 1024 * 1024; // Change to allow up to 5mb
 const CHAT_HISTORY_OVERSIZED_PLACEHOLDER = "[chat.history omitted: message too large]";
 let chatHistoryPlaceholderEmitCount = 0;
 const CHANNEL_AGNOSTIC_SESSION_SCOPES = new Set([
@@ -536,7 +536,10 @@ function sanitizeChatHistoryContentBlock(
     changed = true;
   }
   const type = typeof entry.type === "string" ? entry.type : "";
-  if (type === "image" && typeof entry.data === "string") {
+  // Skip sanitization for images with source.base64 (from read tool)
+  if (type === "image" && (entry.source as { type?: string })?.type === "base64") {
+    // Do nothing - preserve the image
+  } else if (type === "image" && typeof entry.data === "string") {
     const bytes = Buffer.byteLength(entry.data, "utf8");
     delete entry.data;
     entry.omitted = true;

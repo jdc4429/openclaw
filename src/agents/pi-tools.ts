@@ -9,6 +9,7 @@ import { isSubagentSessionKey } from "../routing/session-key.js";
 import { resolveGatewayMessageChannel } from "../utils/message-channel.js";
 import { resolveAgentConfig } from "./agent-scope.js";
 import { createApplyPatchTool } from "./apply-patch.js";
+import { downloadVideoTool } from "./tools/download-video.js";
 import {
   createExecTool,
   createProcessTool,
@@ -248,76 +249,39 @@ export function createOpenClawCodingTools(options?: {
   messageThreadId?: string | number;
   sandbox?: SandboxContext | null;
   sessionKey?: string;
-  /** Ephemeral session UUID — regenerated on /new and /reset. */
   sessionId?: string;
-  /** Stable run identifier for this agent invocation. */
   runId?: string;
-  /** What initiated this run (for trigger-specific tool restrictions). */
   trigger?: string;
-  /** Relative workspace path that memory-triggered writes may append to. */
   memoryFlushWritePath?: string;
   agentDir?: string;
   workspaceDir?: string;
-  /**
-   * Workspace directory that spawned subagents should inherit.
-   * When sandboxing uses a copied workspace (`ro` or `none`), workspaceDir is the
-   * sandbox copy but subagents should inherit the real agent workspace instead.
-   * Defaults to workspaceDir when not set.
-   */
   spawnWorkspaceDir?: string;
   config?: OpenClawConfig;
   abortSignal?: AbortSignal;
-  /**
-   * Provider of the currently selected model (used for provider-specific tool quirks).
-   * Example: "anthropic", "openai", "google", "openai-codex".
-   */
   modelProvider?: string;
-  /** Model id for the current provider (used for model-specific tool gating). */
   modelId?: string;
-  /** Model API for the current provider (used for provider-native tool arbitration). */
   modelApi?: string;
-  /** Model context window in tokens (used to scale read-tool output budget). */
   modelContextWindowTokens?: number;
-  /** Resolved runtime model compatibility hints. */
   modelCompat?: ModelCompatConfig;
-  /**
-   * Auth mode for the current provider. We only need this for Anthropic OAuth
-   * tool-name blocking quirks.
-   */
   modelAuthMode?: ModelAuthMode;
-  /** Current channel ID for auto-threading (Slack). */
   currentChannelId?: string;
-  /** Current thread timestamp for auto-threading (Slack). */
   currentThreadTs?: string;
-  /** Current inbound message id for action fallbacks (e.g. Telegram react). */
   currentMessageId?: string | number;
-  /** Group id for channel-level tool policy resolution. */
   groupId?: string | null;
-  /** Group channel label (e.g. #general) for channel-level tool policy resolution. */
   groupChannel?: string | null;
-  /** Group space label (e.g. guild/team id) for channel-level tool policy resolution. */
   groupSpace?: string | null;
-  /** Parent session key for subagent group policy inheritance. */
   spawnedBy?: string | null;
   senderId?: string | null;
   senderName?: string | null;
   senderUsername?: string | null;
   senderE164?: string | null;
-  /** Reply-to mode for Slack auto-threading. */
   replyToMode?: "off" | "first" | "all" | "batched";
-  /** Mutable ref to track if a reply was sent (for "first" mode). */
   hasRepliedRef?: { value: boolean };
-  /** Allow plugin tools for this run to late-bind the gateway subagent. */
   allowGatewaySubagentBinding?: boolean;
-  /** If true, the model has native vision capability */
   modelHasVision?: boolean;
-  /** Require explicit message targets (no implicit last-route sends). */
   requireExplicitMessageTarget?: boolean;
-  /** If true, omit the message tool from the tool list. */
   disableMessageTool?: boolean;
-  /** Whether the sender is an owner (required for owner-only tools). */
   senderIsOwner?: boolean;
-  /** Callback invoked when sessions_yield tool is called. */
   onYield?: (message: string) => Promise<void> | void;
 }): AnyAgentTool[] {
   const execToolName = "exec";
@@ -344,9 +308,6 @@ export function createOpenClawCodingTools(options?: {
     modelProvider: options?.modelProvider,
     modelId: options?.modelId,
   });
-  // Prefer the already-resolved sandbox context policy. Recomputing from
-  // sessionKey/config can lose the real sandbox agent when callers pass a
-  // legacy alias like `main` instead of an agent session key.
   const sandboxToolPolicy = sandbox?.tools;
   const groupPolicy = resolveGroupToolPolicy({
     config: options?.config,
@@ -370,8 +331,6 @@ export function createOpenClawCodingTools(options?: {
     providerProfilePolicy,
     providerProfileAlsoAllow,
   );
-  // Prefer sessionKey for process isolation scope to prevent cross-session process visibility/killing.
-  // Fallback to agentId if no sessionKey is available (e.g. legacy or global contexts).
   const scopeKey =
     options?.exec?.scopeKey ?? options?.sessionKey ?? (agentId ? `agent:${agentId}` : undefined);
   const subagentPolicy =
@@ -400,8 +359,6 @@ export function createOpenClawCodingTools(options?: {
   const workspaceRoot = resolveWorkspaceRoot(options?.workspaceDir);
   const workspaceOnly = fsPolicy.workspaceOnly;
   const applyPatchConfig = execConfig.applyPatch;
-  // Secure by default: apply_patch is workspace-contained unless explicitly disabled.
-  // (tools.fs.workspaceOnly is a separate umbrella flag for read/write/edit/apply_patch.)
   const applyPatchWorkspaceOnly = workspaceOnly || applyPatchConfig?.workspaceOnly !== false;
   const applyPatchEnabled =
     applyPatchConfig?.enabled !== false &&
@@ -418,29 +375,30 @@ export function createOpenClawCodingTools(options?: {
   const imageSanitization = resolveImageSanitizationLimits(options?.config);
 
   const base = (codingTools as unknown as AnyAgentTool[]).flatMap((tool) => {
-    if (tool.name === readTool.name) {
-      if (sandboxRoot) {
-        const sandboxed = createSandboxedReadTool({
-          root: sandboxRoot,
-          bridge: sandboxFsBridge!,
-          modelContextWindowTokens: options?.modelContextWindowTokens,
-          imageSanitization,
-        });
-        return [
-          workspaceOnly
-            ? wrapToolWorkspaceRootGuardWithOptions(sandboxed, sandboxRoot, {
-                containerWorkdir: sandbox.containerWorkdir,
-              })
-            : sandboxed,
-        ];
-      }
-      const freshReadTool = createReadTool(workspaceRoot);
-      const wrapped = createOpenClawReadTool(freshReadTool, {
-        modelContextWindowTokens: options?.modelContextWindowTokens,
-        imageSanitization,
-      });
-      return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
-    }
+if (tool.name === readTool.name) {
+  if (sandboxRoot) {
+    const sandboxed = createSandboxedReadTool({
+      root: sandboxRoot,
+      bridge: sandboxFsBridge!,
+      modelContextWindowTokens: options?.modelContextWindowTokens,
+      imageSanitization,
+    });
+    return [
+      workspaceOnly
+        ? wrapToolWorkspaceRootGuardWithOptions(sandboxed, sandboxRoot, {
+            containerWorkdir: sandbox.containerWorkdir,
+          })
+        : sandboxed,
+    ];
+  }
+  const freshReadTool = createReadTool(workspaceRoot);
+  const wrapped = createOpenClawReadTool(freshReadTool, {
+    root: workspaceRoot,
+    modelContextWindowTokens: options?.modelContextWindowTokens,
+    imageSanitization,
+  });
+  return [workspaceOnly ? wrapToolWorkspaceRootGuard(wrapped, workspaceRoot) : wrapped];
+}
     if (tool.name === "bash" || tool.name === execToolName) {
       return [];
     }
@@ -544,7 +502,6 @@ export function createOpenClawCodingTools(options?: {
     ...(applyPatchTool ? [applyPatchTool as unknown as AnyAgentTool] : []),
     execTool as unknown as AnyAgentTool,
     processTool as unknown as AnyAgentTool,
-    // Channel docking: include channel-defined agent tools (login, etc.).
     ...listChannelAgentTools({ cfg: options?.config }),
     ...createOpenClawTools({
       sandboxBrowserBridgeUrl: sandbox?.browser?.bridgeUrl,
@@ -594,6 +551,7 @@ export function createOpenClawCodingTools(options?: {
       onYield: options?.onYield,
       allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
     }),
+    downloadVideoTool as AnyAgentTool,
   ];
   const toolsForMemoryFlush =
     isMemoryFlushRun && memoryFlushWritePath
@@ -629,7 +587,6 @@ export function createOpenClawCodingTools(options?: {
     agentDir: options?.agentDir,
     modelCompat: options?.modelCompat,
   });
-  // Security: treat unknown/undefined as unauthorized (opt-in, not opt-out)
   const senderIsOwner = options?.senderIsOwner === true;
   const toolsByAuthorization = applyOwnerOnlyToolPolicy(toolsForModelProvider, senderIsOwner);
   const subagentFiltered = applyToolPolicyPipeline({
@@ -655,9 +612,6 @@ export function createOpenClawCodingTools(options?: {
       { policy: subagentPolicy, label: "subagent tools.allow" },
     ],
   });
-  // Always normalize tool JSON Schemas before handing them to pi-agent/pi-ai.
-  // Without this, some providers (notably OpenAI) will reject root-level union schemas.
-  // Provider-specific cleaning: Gemini needs constraint keywords stripped, but Anthropic expects them.
   const normalized = subagentFiltered.map((tool) =>
     normalizeToolParameters(tool, {
       modelProvider: options?.modelProvider,
@@ -681,8 +635,5 @@ export function createOpenClawCodingTools(options?: {
     agentId,
   });
 
-  // NOTE: Keep canonical (lowercase) tool names here.
-  // pi-ai's Anthropic OAuth transport remaps tool names to Claude Code-style names
-  // on the wire and maps them back for tool dispatch.
   return withDeferredFollowupDescriptions;
 }

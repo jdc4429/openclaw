@@ -5,6 +5,18 @@ import type { ChannelOutboundTargetMode } from "../../channels/plugins/types.js"
 import type { PromptImageOrderEntry } from "../../media/prompt-image-order.js";
 import type { InputProvenance } from "../../sessions/input-provenance.js";
 
+export type AudioContent = {
+  type: 'audio';
+  data: Buffer | string;
+  mimeType?: string;
+};
+
+export type VideoContent = {
+  type: 'video';
+  data: Buffer | string;
+  mimeType?: string;
+};
+
 /** Image content block for Claude API multimodal messages. */
 export type ImageContent = {
   type: "image";

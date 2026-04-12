@@ -15,7 +15,7 @@ describe("memory vector dedupe", () => {
     db.exec("CREATE TABLE chunks_vec (id TEXT PRIMARY KEY, embedding BLOB)");
 
     replaceMemoryVectorRow({
-      db,
+      db: db as unknown as VectorWriteDb,
       id: "chunk-1",
       embedding: [1, 0, 0],
     });
@@ -31,7 +31,7 @@ describe("memory vector dedupe", () => {
 
     expect(() =>
       replaceMemoryVectorRow({
-        db: db!,
+        db: db! as unknown as VectorWriteDb,
         id: "chunk-1",
         embedding: [2, 0, 0],
       }),

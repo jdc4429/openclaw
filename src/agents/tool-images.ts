@@ -16,7 +16,7 @@ import {
 
 type ToolContentBlock = AgentToolResult<unknown>["content"][number];
 type ImageContentBlock = Extract<ToolContentBlock, { type: "image" }>;
-type TextContentBlock = Extract<ToolContentBlock, { type: "text" }>;
+export type TextContentBlock = Extract<ToolContentBlock, { type: "text" }>;
 
 // Anthropic Messages API limitations (observed in OpenClaw sessions):
 // - Images over ~2000px per side can fail in multi-image requests.
@@ -353,10 +353,18 @@ export async function sanitizeToolResultImages(
   opts: ImageSanitizationLimits = {},
 ): Promise<AgentToolResult<unknown>> {
   const content = Array.isArray(result.content) ? result.content : [];
+
+  // Check if there are any image or text blocks to process (skip audio/video)
   if (!content.some((b) => isImageBlock(b) || isTextBlock(b))) {
     return result;
   }
 
-  const next = await sanitizeContentBlocksImages(content, label, opts);
-  return { ...result, content: next };
+  // Filter out audio/video blocks, only sanitize image blocks
+  const blocksToSanitize = content.filter((b) => isImageBlock(b) || isTextBlock(b));
+  const otherBlocks = content.filter((b) => !isImageBlock(b) && !isTextBlock(b));
+
+  const sanitizedBlocks = await sanitizeContentBlocksImages(blocksToSanitize, label, opts);
+
+  // Combine sanitized blocks with untouched audio/video blocks
+  return { ...result, content: [...sanitizedBlocks, ...otherBlocks] };
 }
