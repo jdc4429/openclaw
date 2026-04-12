@@ -88,23 +88,23 @@ None - all features are additive.
 ## Modifications to add image, audio, and video to webchat.
 
 #Added & Modified Files:
-
-.openclaw\workspace\openclaw\src\agents\tool-media.ts - NEW FILE
-.openclaw\workspace\openclaw\src\agents\pi-tools.read.ts
-.openclaw\workspace\openclaw\src\agents\pi-tools.ts
-.openclaw\workspace\openclaw\src\agents\tool-images.ts
-.openclaw\workspace\openclaw\src\agents\command\types.ts
-.openclaw\workspace\openclaw\src\gateway\control-ui-csp.ts
-.openclaw\workspace\openclaw\src\agents\tools\image-tool.ts
-.openclaw\workspace\openclaw\src\agents\tools\download-video.ts - NEW FILE
-.openclaw\workspace\openclaw\src\agents\image-sanitization.ts
-.openclaw\workspace\openclaw\src\gateway\server-methods\chat.ts
-.openclaw\workspace\openclaw\ui\src\ui\markdown.ts
-.openclaw\workspace\openclaw\ui\src\ui\chat\grouped-render.ts
-.openclaw\workspace\openclaw\ui\src\styles\chat\grouped.css
-.openclaw\workspace\openclaw\ui\src\styles\components.css
-.openclaw\workspace\openclaw\ui\src\ui\chat\message-resize.ts - NEW FILE
-
+  
+.openclaw\workspace\openclaw\src\agents\tool-media.ts - NEW FILE  
+.openclaw\workspace\openclaw\src\agents\pi-tools.read.ts  
+.openclaw\workspace\openclaw\src\agents\pi-tools.ts  
+.openclaw\workspace\openclaw\src\agents\tool-images.ts  
+.openclaw\workspace\openclaw\src\agents\command\types.ts  
+.openclaw\workspace\openclaw\src\gateway\control-ui-csp.ts  
+.openclaw\workspace\openclaw\src\agents\tools\image-tool.ts  
+.openclaw\workspace\openclaw\src\agents\tools\download-video.ts - NEW FILE  
+.openclaw\workspace\openclaw\src\agents\image-sanitization.ts  
+.openclaw\workspace\openclaw\src\gateway\server-methods\chat.ts  
+.openclaw\workspace\openclaw\ui\src\ui\markdown.ts  
+.openclaw\workspace\openclaw\ui\src\ui\chat\grouped-render.ts  
+.openclaw\workspace\openclaw\ui\src\styles\chat\grouped.css  
+.openclaw\workspace\openclaw\ui\src\styles\components.css  
+.openclaw\workspace\openclaw\ui\src\ui\chat\message-resize.ts - NEW FILE  
+  
 ## Some Screenshots
 
 <img width="1250" height="894" alt="embeded-video" src="https://github.com/user-attachments/assets/f0eba12d-4406-41a4-b374-6868e681a898" />
