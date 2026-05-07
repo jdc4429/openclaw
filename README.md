@@ -116,9 +116,9 @@ This install/configuration has been tested running under Ubuntu 24 under WSL und
   
 I recommend you install the app globally and then have your config in a user folder like /home/openclaw (See releases for user config portion)  
   
-To build and install the app globally, simply run from root folder: ./global 
-sudo is required to install globally so you will be asked for your sudo password if you install globally.
-This command will build the release and then install for all users under Ubuntu.
+To build and install the app globally, simply run from root folder: ./global  
+sudo is required to install globally so you will be asked for your sudo password if you install globally.  
+This command will build the release and then install for all users under Ubuntu.  
   
 OR (Build manually, run setup manually, and build and run under that folder.  Commands are different to run the build like this, just Google search or look at main OpenClaw release)
   
