@@ -144,6 +144,7 @@ pnpm build
 Note: You still need to install the configuration portion in a user folder ie. /home/openclaw unless you run from under the build<br>
   
 I created a copy with an example config you can simple download and 'tar xzvf file.tgz ~/' to extract to your current user folder.<br>
+The user config extracts to the .openclaw directory. (Hidden unless you use ls -la)
 Edit openclaw.json config to add your API keys, change root folders, and run setup for some extra plugins.<br>
 
 
