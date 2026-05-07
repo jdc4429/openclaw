@@ -2,6 +2,9 @@
 
 Version 2026.4.23 (Before they started screwing everything up)
   
+The read tool has been modified in this release to add images, audio, or video to chat.
+Simply add to TOOLS.md and tell AI model to read it to understand the command. See example TOOLS-EXAMPLE.md
+
 This custom build adds comprehensive media support to OpenClaw across multiple channels:
   
 ### 🌐 WebChat (Complete media suite)
