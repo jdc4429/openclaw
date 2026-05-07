@@ -42,7 +42,7 @@ This custom build adds comprehensive media support to OpenClaw across multiple c
 - M4V (.m4v) - video/x-m4v
 - MPG/MPEG (.mpg, .mpeg) - video/mpeg
 
-**Social Media Embeds:**
+**Social Media Embeds:** (Disabled by default)
 
 - YouTube
 - Twitter/X
